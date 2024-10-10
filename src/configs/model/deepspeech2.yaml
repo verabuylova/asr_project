@@ -1,0 +1,4 @@
+_target_: src.model.deepspeech2_model.DeepSpeech2Model
+n_feats: 128
+fc_hidden: 512
+n_tokens: 28
