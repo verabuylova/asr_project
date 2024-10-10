@@ -112,3 +112,5 @@ outputs/
 .vscode/
 .idea/
 __MACOSX/
+librispeech-vocab.txt
+3-gram.arpa

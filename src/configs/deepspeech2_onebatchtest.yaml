@@ -24,8 +24,8 @@ text_encoder:
   kenlm_model_path: "3-gram.arpa"
 trainer:
   log_step: 1
-  n_epochs: 2
-  epoch_len: 3
+  n_epochs: 3
+  epoch_len: 30
   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
   device: auto # device name or "auto"

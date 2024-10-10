@@ -124,6 +124,7 @@ class Trainer(BaseTrainer):
                 "target": target,
                 "raw prediction": raw_pred,
                 "predictions": pred,
+                "predictions bs+lm": pred_bs,
                 "wer": wer,
                 "cer": cer,
                 "wer_bs": wer_bs,

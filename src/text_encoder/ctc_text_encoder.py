@@ -6,11 +6,6 @@ from pyctcdecode import build_ctcdecoder
 import torch
 import numpy as np
 
-# TODO add BPE, LM, Beam Search support
-# Note: think about metrics and encoder
-# The design can be remarkably improved
-# to calculate stuff more efficiently and prettier
-
 
 class CTCTextEncoder:
     EMPTY_TOK = ""
