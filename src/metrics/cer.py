@@ -30,7 +30,7 @@ class ArgmaxCERMetric(BaseMetric):
 
 class BeamSearchCERMetric(BaseMetric):
     def __init__(
-        self, text_encoder, type: str = "BS", beam_size=10, *args, **kwargs
+        self, text_encoder, beam_size=10, *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.text_encoder = text_encoder
@@ -46,4 +46,5 @@ class BeamSearchCERMetric(BaseMetric):
             pred_text = self.text_encoder.ctc_beam_search(prob[:length], 5)
             cers.append(calc_cer(target_text, pred_text))
         return sum(cers) / len(cers)
+    
     

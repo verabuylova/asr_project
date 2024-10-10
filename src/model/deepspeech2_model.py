@@ -56,7 +56,7 @@ class DeepSpeech2Model(nn.Module):
         x = self.fc(x)
         x = x.view(T, N, -1)
         x = x.transpose(0, 1)
-
+        
         return {'log_probs': nn.functional.log_softmax(x, dim = -1), 'log_probs_length': self.transform_input_lengths(spectrogram_length)}
 
     def transform_input_lengths(self, input_lengths):
