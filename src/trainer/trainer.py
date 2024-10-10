@@ -58,6 +58,7 @@ class Trainer(BaseTrainer):
             metrics.update(loss_name, batch[loss_name].item())
 
         for met in metric_funcs:
+            print(met.name, batch.keys())
             metrics.update(met.name, met(**batch))
         return batch
 
@@ -96,6 +97,7 @@ class Trainer(BaseTrainer):
         # Note: by improving text encoder and metrics design
         # this logging can also be improved significantly
 
+
         argmax_inds = log_probs.cpu().argmax(-1).numpy()
         argmax_inds = [
             inds[: int(ind_len)]
@@ -103,13 +105,20 @@ class Trainer(BaseTrainer):
         ]
         argmax_texts_raw = [self.text_encoder.decode(inds) for inds in argmax_inds]
         argmax_texts = [self.text_encoder.ctc_decode(inds) for inds in argmax_inds]
-        tuples = list(zip(argmax_texts, text, argmax_texts_raw, audio_path))
+
+        preds_bs = [self.text_encoder.ctc_beam_search(log_probs_element[:log_probs_length_element], 2) 
+                    for (log_probs_element, log_probs_length_element) in zip(log_probs, log_probs_length)]
+
+        tuples = list(zip(argmax_texts, preds_bs, text, argmax_texts_raw, audio_path))
 
         rows = {}
-        for pred, target, raw_pred, audio_path in tuples[:examples_to_log]:
+        for pred, pred_bs, target, raw_pred, audio_path in tuples[:examples_to_log]:
             target = self.text_encoder.normalize_text(target)
             wer = calc_wer(target, pred) * 100
             cer = calc_cer(target, pred) * 100
+
+            wer_bs = calc_wer(target, pred_bs) * 100
+            cer_bs = calc_cer(target, pred_bs) * 100
 
             rows[Path(audio_path).name] = {
                 "target": target,
@@ -117,6 +126,8 @@ class Trainer(BaseTrainer):
                 "predictions": pred,
                 "wer": wer,
                 "cer": cer,
+                "wer_bs": wer_bs,
+                "cer_bs":cer_bs
             }
         self.writer.add_table(
             "predictions", pd.DataFrame.from_dict(rows, orient="index")

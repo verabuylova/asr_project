@@ -1,7 +1,9 @@
 import re
 from string import ascii_lowercase
+from collections import defaultdict
 
 import torch
+import numpy as np
 
 # TODO add BPE, LM, Beam Search support
 # Note: think about metrics and encoder
@@ -70,6 +72,37 @@ class CTCTextEncoder:
         empty_i = self.char2ind[self.EMPTY_TOK]
         return "".join([self.ind2char[int(ind)] for ind in collapsed_inds if int(ind) != empty_i]).strip()
 
+    def ctc_beam_search(self, log_probs: torch.tensor, beam_size: int):
+        dp = {
+            ('', self.EMPTY_TOK): 1.0
+        }
+        
+        def extend_path_and_merge(dp, next_token_probs: torch.tensor, ind2char: dict):
+            new_dp = defaultdict(float)
+            for ind, next_token_prob in enumerate(next_token_probs.T):
+                cur_char = ind2char[ind]
+                for (prefix, last_char), v in dp.items():
+                    if cur_char == last_char:
+                        new_prefix = prefix
+                    else:
+                        if cur_char != self.EMPTY_TOK:
+                            new_prefix = prefix + cur_char
+                        else:
+                            new_prefix = prefix
+                    new_dp[(new_prefix, cur_char)] += v + next_token_prob
+            return new_dp
+
+        def truncate_paths(dp, beam_size):
+            return dict(sorted(list(dp.items()), key=lambda x: -x[1], reverse=True)[ : beam_size])
+        
+        print(log_probs.shape)
+        for probs in log_probs:
+            dp = extend_path_and_merge(dp=dp, next_token_probs=probs, ind2char=self.ind2char)
+            dp = truncate_paths(dp, beam_size)
+
+        dp = [(prefix, proba) for (prefix, _), proba in dp.items()]
+
+        return dp[0][0]
 
     @staticmethod
     def normalize_text(text: str):
