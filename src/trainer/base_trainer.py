@@ -58,7 +58,8 @@ class BaseTrainer:
                 tensor name.
         """
         self.is_train = True
-
+        self.current_epoch = 0 
+        
         self.config = config
         self.cfg_trainer = self.config.trainer
 
@@ -145,6 +146,9 @@ class BaseTrainer:
         if config.trainer.get("from_pretrained") is not None:
             self._from_pretrained(config.trainer.get("from_pretrained"))
 
+    def increment_epoch(self):
+        self.current_epoch += 1
+
     def train(self):
         """
         Wrapper around training process to save model on keyboard interrupt.
@@ -168,6 +172,8 @@ class BaseTrainer:
         for epoch in range(self.start_epoch, self.epochs + 1):
             self._last_epoch = epoch
             result = self._train_epoch(epoch)
+
+            self.increment_epoch()
 
             # save logged information into logs dict
             logs = {"epoch": epoch}
