@@ -11,13 +11,13 @@ from src.datasets.base_dataset import BaseDataset
 from src.utils.io_utils import ROOT_PATH
 
 URL_LINKS = {
-    "dev-clean": "/kaggle/input/librispeech/dev-clean",
-    "dev-other": "/kaggle/input/librispeech/dev-other",
-    "test-clean": "/kaggle/input/librispeech/test-clean",
-    "test-other": "/kaggle/input/librispeech/test-other",
-    "train-clean-100": "/kaggle/input/librispeech/train-clean-100",
-    "train-clean-360": "/kaggle/input/librispeech/train-clean-360",
-    "train-other-500": "/kaggle/input/librispeech/train-other-500",
+    "dev-clean": "https://www.openslr.org/resources/12/dev-clean.tar.gz",
+    "dev-other": "https://www.openslr.org/resources/12/dev-other.tar.gz",
+    "test-clean": "https://www.openslr.org/resources/12/test-clean.tar.gz",
+    "test-other": "https://www.openslr.org/resources/12/test-other.tar.gz",
+    "train-clean-100": "https://www.openslr.org/resources/12/train-clean-100.tar.gz",
+    "train-clean-360": "https://www.openslr.org/resources/12/train-clean-360.tar.gz",
+    "train-other-500": "https://www.openslr.org/resources/12/train-other-500.tar.gz",
 }
 
 
@@ -46,12 +46,15 @@ class LibrispeechDataset(BaseDataset):
     def _load_part(self, part):
         arch_path = self._data_dir / f"{part}.tar.gz"
         print(f"Loading part {part}")
-        wget.download(URL_LINKS[part], str(arch_path))
-        shutil.unpack_archive(arch_path, self._data_dir)
-        for fpath in (self._data_dir / "LibriSpeech").iterdir():
-            shutil.move(str(fpath), str(self._data_dir / fpath.name))
-        os.remove(str(arch_path))
-        shutil.rmtree(str(self._data_dir / "LibriSpeech"))
+        split_dir = self._data_dir / part
+        if not split_dir.exists():
+            input_path = Path(f"/kaggle/input/librispeech/{part}")
+            if not input_path.exists():
+                raise FileNotFoundError(f"The specified dataset part {part} does not exist in the input directory.")
+            for fpath in input_path.iterdir():
+                shutil.move(str(fpath), str(self._data_dir / fpath.name))
+        else:
+            print(f"{part} already loaded.")
 
     def _get_or_load_index(self, part):
         index_path = self._data_dir / f"{part}_index.json"
