@@ -2,6 +2,7 @@ import re
 from string import ascii_lowercase
 from collections import defaultdict
 from pyctcdecode import build_ctcdecoder
+from pyctcdecode import Alphabet, BeamSearchDecoderCTC
 
 import torch
 import numpy as np
@@ -10,13 +11,12 @@ import numpy as np
 class CTCTextEncoder:
     EMPTY_TOK = ""
 
-    def __init__(self, alphabet=None, use_lm=True, kenlm_model_path="3-gram.arpa", vocab_path="librispeech-vocab.txt", **kwargs):
+    def __init__(self, alphabet=None, kenlm_model_path="3-gram.arpa", vocab_path="librispeech-vocab.txt", **kwargs):
         """
         Args:
             alphabet (list): alphabet for language. If None, it will be
                 set to ascii
         """
-        self.use_lm = use_lm
         if alphabet is None:
             alphabet = list(ascii_lowercase + " ")
 
@@ -27,7 +27,9 @@ class CTCTextEncoder:
         self.char2ind = {v: k for k, v in self.ind2char.items()}
         with open(vocab_path) as f:
                 unigrams = [t.lower() for t in f.read().strip().split("\n")]
-        self.decoder  = build_ctcdecoder([self.EMPTY_TOK] + [i.upper() for i in self.alphabet], kenlm_model_path=kenlm_model_path, unigrams=unigrams)
+
+        self.decoder_lm  = build_ctcdecoder([self.EMPTY_TOK] + [i.upper() for i in self.alphabet], kenlm_model_path=kenlm_model_path, unigrams=unigrams)
+        self.decoder_no_lm = BeamSearchDecoderCTC(Alphabet(self.vocab, False), None)
 
     def __len__(self):
         return len(self.vocab)
@@ -71,11 +73,16 @@ class CTCTextEncoder:
         empty_i = self.char2ind[self.EMPTY_TOK]
         return "".join([self.ind2char[int(ind)] for ind in collapsed_inds if int(ind) != empty_i]).strip()
 
-    def ctc_beam_search(self, log_probs: torch.tensor, beam_size: int):
-        if self.use_lm:
+    def ctc_beam_search(self, use_lm: bool, log_probs: torch.tensor, beam_size: int):
+        if use_lm:
             if isinstance(log_probs, torch.Tensor):
                 log_probs = log_probs.detach().cpu().numpy()
-            return self.decoder.decode(log_probs, beam_size).lower()
+            return self.decoder_lm.decode(log_probs, beam_size).lower()
+        else:
+            if isinstance(log_probs, torch.Tensor):
+                log_probs = log_probs.detach().cpu().numpy()
+            return self.decoder_no_lm.decode(log_probs, beam_size).lower()
+        
         dp = {
             ('', self.EMPTY_TOK): 1.0
         }

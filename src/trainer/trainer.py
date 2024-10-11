@@ -105,13 +105,17 @@ class Trainer(BaseTrainer):
         argmax_texts_raw = [self.text_encoder.decode(inds) for inds in argmax_inds]
         argmax_texts = [self.text_encoder.ctc_decode(inds) for inds in argmax_inds]
 
-        preds_bs = [self.text_encoder.ctc_beam_search(log_probs_element[:log_probs_length_element], 4) 
+        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs_element[:log_probs_length_element], 4) 
                     for (log_probs_element, log_probs_length_element) in zip(log_probs, log_probs_length)]
+        
+        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs_element[:log_probs_length_element], 4) 
+                    for (log_probs_element, log_probs_length_element) in zip(log_probs, log_probs_length)]
+        
 
-        tuples = list(zip(argmax_texts, preds_bs, text, argmax_texts_raw, audio_path))
+        tuples = list(zip(argmax_texts, preds_bs, preds_bs_lm, text, argmax_texts_raw, audio_path))
 
         rows = {}
-        for pred, pred_bs, target, raw_pred, audio_path in tuples[:examples_to_log]:
+        for pred, pred_bs, pred_bs_lm, target, raw_pred, audio_path in tuples[:examples_to_log]:
             target = self.text_encoder.normalize_text(target)
             wer = calc_wer(target, pred) * 100
             cer = calc_cer(target, pred) * 100
@@ -119,15 +123,20 @@ class Trainer(BaseTrainer):
             wer_bs = calc_wer(target, pred_bs) * 100
             cer_bs = calc_cer(target, pred_bs) * 100
 
+            wer_bs_lm = calc_wer(target, pred_bs_lm) * 100
+            cer_bs_lm = calc_cer(target, pred_bs_lm) * 100
+
             rows[Path(audio_path).name] = {
                 "target": target,
                 "raw prediction": raw_pred,
                 "predictions": pred,
-                "predictions bs+lm": pred_bs,
+                "predictions bs+lm": pred_bs_lm,
                 "wer": wer,
                 "cer": cer,
                 "wer_bs": wer_bs,
-                "cer_bs":cer_bs
+                "cer_bs": cer_bs,
+                "wer_bs_lm": wer_bs_lm,
+                "cer_bs_lm":cer_bs_lm
             }
         self.writer.add_table(
             "predictions", pd.DataFrame.from_dict(rows, orient="index")
