@@ -22,6 +22,7 @@ text_encoder:
   _target_: src.text_encoder.CTCTextEncoder
   use_lm: True
   kenlm_model_path: "/kaggle/input/3-gram-pruned/3-gram.pruned.1e-7.arpa"
+  vocab_path: "/kaggle/input/librispeech-vocab/librispeech-vocab.txt"
 trainer:
   log_step: 50
   n_epochs: 20

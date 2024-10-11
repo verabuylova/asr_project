@@ -10,7 +10,7 @@ import numpy as np
 class CTCTextEncoder:
     EMPTY_TOK = ""
 
-    def __init__(self, alphabet=None, use_lm=True, kenlm_model_path="3-gram.arpa", **kwargs):
+    def __init__(self, alphabet=None, use_lm=True, kenlm_model_path="3-gram.arpa", vocab_path="librispeech-vocab.txt", **kwargs):
         """
         Args:
             alphabet (list): alphabet for language. If None, it will be
@@ -25,7 +25,7 @@ class CTCTextEncoder:
 
         self.ind2char = dict(enumerate(self.vocab))
         self.char2ind = {v: k for k, v in self.ind2char.items()}
-        with open("librispeech-vocab.txt") as f:
+        with open(vocab_path) as f:
                 unigrams = [t.lower() for t in f.read().strip().split("\n")]
         self.decoder  = build_ctcdecoder([self.EMPTY_TOK] + [i.upper() for i in self.alphabet], kenlm_model_path=kenlm_model_path, unigrams=unigrams)
 
