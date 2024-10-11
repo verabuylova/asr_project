@@ -57,8 +57,8 @@ class DeepSpeech2Model(nn.Module):
         x = x.transpose(1, 2)  # [N, T, C*F]
         x = x.transpose(0, 1).contiguous()  # [T, N, C*F]
 
-        for gru_with_bn in self.grus:
-            x = gru_with_bn(x)
+        for gru in self.grus:
+            x = gru(x)
 
         T, N = x.shape[0], x.shape[1]
         x = x.view(T * N, -1) 
@@ -69,7 +69,8 @@ class DeepSpeech2Model(nn.Module):
         return {'log_probs': nn.functional.log_softmax(x, dim=-1), 'log_probs_length': self.transform_input_lengths(spectrogram_length)}
 
     def transform_input_lengths(self, input_lengths):
-        return torch.zeros_like(input_lengths).fill_((((((input_lengths.max() + 2 * 5 - 11) // 2 + 1) + 2 * 5 - 11) // 2 + 1) + 2 * 5 - 11) + 1)
+        d = ((((((input_lengths.max() + 2 * 5 - 11) // 2 + 1) + 2 * 5 - 11) // 2 + 1) + 2 * 5 - 11) + 1)
+        return torch.zeros_like(input_lengths).fill_(d)
 
     def __str__(self):
         """
