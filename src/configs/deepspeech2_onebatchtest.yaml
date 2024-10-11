@@ -21,8 +21,8 @@ loss_function:
 text_encoder:
   _target_: src.text_encoder.CTCTextEncoder
   use_lm: True
-  kenlm_model_path: "/kaggle/input/librispeech-4gram-language-model/4-gram.arpa"
-  vocab_path: "/kaggle/input/librispeech-vocab/librispeech-vocab.txt"
+  kenlm_model_path: "3-gram.arpa"
+  vocab_path: "librispeech-vocab.txt"
 trainer:
   log_step: 1
   n_epochs: 3
@@ -35,4 +35,4 @@ trainer:
   save_period: 5 # checkpoint each save_period epochs in addition to the best epoch
   early_stop: ${trainer.n_epochs} # epochs for early stopping
   save_dir: "saved"
-  seed: 1
+  seed: 50
