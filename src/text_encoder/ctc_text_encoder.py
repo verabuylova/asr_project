@@ -25,10 +25,10 @@ class CTCTextEncoder:
 
         self.ind2char = dict(enumerate(self.vocab))
         self.char2ind = {v: k for k, v in self.ind2char.items()}
-        with open(vocab_path) as f:
-                unigrams = [t.lower() for t in f.read().strip().split("\n")]
-
-        self.decoder_lm  = build_ctcdecoder([self.EMPTY_TOK] + [i.upper() for i in self.alphabet], kenlm_model_path=kenlm_model_path, unigrams=unigrams)
+        if kenlm_model_path is not None:
+            with open(vocab_path) as f:
+                unigrams = [line.strip() for line in f.readlines()]
+            self.decoder_lm = build_ctcdecoder(labels=[self.EMPTY_TOK] + self.alphabet, kenlm_model_path=kenlm_model_path, unigrams=unigrams)
         self.decoder_no_lm = BeamSearchDecoderCTC(Alphabet(self.vocab, False), None)
 
     def __len__(self):

@@ -39,7 +39,7 @@ class Trainer(BaseTrainer):
 
         for met in metric_funcs:
             if met.name in ["CER_(BS)", "WER_(BS)", "CER_(BS_LM)", "WER_(BS_LM)"]:
-                if self.current_epoch % 5 == 0: 
+                if self.current_epoch % 10 == 0: 
                     metrics.update(met.name, met(**batch))
             else:
                 metrics.update(met.name, met(**batch))
@@ -116,6 +116,7 @@ class Trainer(BaseTrainer):
                 "target": target,
                 "raw prediction": raw_pred,
                 "predictions": pred,
+                "predictions bs": pred_bs,
                 "predictions bs+lm": pred_bs_lm,
                 "wer": wer,
                 "cer": cer,
