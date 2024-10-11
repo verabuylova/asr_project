@@ -49,6 +49,9 @@ class DeepSpeech2Model(nn.Module):
                                   [GRUWithBatchNorm(fc_hidden, fc_hidden) for _ in range(4)])
 
         self.fc = nn.Linear(fc_hidden, n_tokens)
+        self.paddings = [(20, 5), (10, 5), (10, 5)]
+        self.kernel_sizes = [(41, 11), (21, 11), (21, 11)]
+        self.strides = [(2, 2), (2, 1), (2, 1)]
 
     def forward(self, spectrogram, spectrogram_length, **batch):
         x = self.conv(spectrogram.unsqueeze(1))  # [N, 1, F, T]
@@ -69,8 +72,9 @@ class DeepSpeech2Model(nn.Module):
         return {'log_probs': nn.functional.log_softmax(x, dim=-1), 'log_probs_length': self.transform_input_lengths(spectrogram_length)}
 
     def transform_input_lengths(self, input_lengths):
-        d = ((((((input_lengths.max() + 2 * 5 - 11) // 2 + 1) + 2 * 5 - 11) // 2 + 1) + 2 * 5 - 11) + 1)
-        return torch.zeros_like(input_lengths).fill_(d)
+        for i in range(3):
+            input_lengths = torch.floor((input_lengths + 2 * self.paddings[i][1] - (self.kernel_sizes[i][1] - 1) - 1) / self.strides[i][1] + 1).to(torch.int)
+        return input_lengths
 
     def __str__(self):
         """
