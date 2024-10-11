@@ -21,7 +21,7 @@ loss_function:
 text_encoder:
   _target_: src.text_encoder.CTCTextEncoder
   use_lm: True
-  kenlm_model_path: "4-gram.arpa"
+  kenlm_model_path: "/kaggle/input/3-gram-pruned/3-gram.pruned.1e-7.arpa"
 trainer:
   log_step: 1
   n_epochs: 3
