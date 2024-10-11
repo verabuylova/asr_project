@@ -97,8 +97,6 @@ class CTCTextEncoder:
 
         def truncate_paths(dp, beam_size):
             return dict(sorted(list(dp.items()), key=lambda x: -x[1], reverse=True)[ : beam_size])
-        
-        print(log_probs.shape)
         for probs in log_probs:
             dp = extend_path_and_merge(dp=dp, next_token_probs=probs, ind2char=self.ind2char)
             dp = truncate_paths(dp, beam_size)
