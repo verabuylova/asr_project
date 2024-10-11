@@ -2,32 +2,21 @@ import torch
 from torch import nn
 from torch.nn import Sequential, BatchNorm1d
 
-import torch
-from torch import nn
-from torch.nn import Sequential, BatchNorm1d
-
 class GRUWithBatchNorm(nn.Module):
     def __init__(self, input_size, hidden_size):
         super(GRUWithBatchNorm, self).__init__()
-        self.batchnorm_input = BatchNorm1d(input_size) 
-        self.relu = nn.ReLU()
         self.gru = nn.GRU(input_size, hidden_size, bidirectional=True)
-        self.batchnorm_output = BatchNorm1d(hidden_size)
+        self.batchnorm = BatchNorm1d(hidden_size)
 
     def forward(self, x):
-        T, N = x.shape[0], x.shape[1]
-        x = x.view(T * N, -1)
-        x = self.batchnorm_input(x)
-        x = self.relu(x)
-        x = x.view(T, N, -1)
         x, _ = self.gru(x)
         x = x.view(x.shape[0], x.shape[1], 2, -1).sum(2)
-        T, N = x.shape[0], x.shape[1]
+        T, N = x.shape[0], x.shape[1] 
         x = x.view(T * N, -1)
-        x = self.batchnorm_output(x)
+        x = self.batchnorm(x) 
+        # [T, N, hidden_size]
         x = x.view(T, N, -1)
         return x
-
 
 
 class DeepSpeech2Model(nn.Module):
