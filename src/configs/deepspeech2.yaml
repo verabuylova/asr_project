@@ -25,7 +25,7 @@ text_encoder:
   vocab_path: "/kaggle/input/librispeech-vocab/librispeech-vocab.txt"
 trainer:
   log_step: 50
-  n_epochs: 20
+  n_epochs: 100
   epoch_len: 200
   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
