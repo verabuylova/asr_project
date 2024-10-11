@@ -120,8 +120,6 @@ class Inferencer(BaseTrainer):
                 the dataloader (possibly transformed via batch transform)
                 and model outputs.
         """
-        # TODO change inference logic so it suits ASR assignment
-        # and task pipeline
 
         batch = self.move_batch_to_device(batch)
         batch = self.transform_batch(batch)  # transform batch on device -- faster
@@ -136,15 +134,16 @@ class Inferencer(BaseTrainer):
         # Some saving logic. This is an example
         # Use if you need to save predictions on disk
 
-        batch_size = batch["logits"].shape[0]
+        batch_size = batch["log_probs"].shape[0]
         current_id = batch_idx * batch_size
 
         for i in range(batch_size):
             # clone because of
             # https://github.com/pytorch/pytorch/issues/1995
-            logits = batch["logits"][i].clone()
-            label = batch["labels"][i].clone()
-            pred_label = logits.argmax(dim=-1)
+            logits = batch["log_probs"][i].clone()
+            length = batch["log_probs_length"][i].clone()
+            label = batch["text"][i]
+            pred_label = self.text_encoder.ctc_beam_search(logits[:length], 4) 
 
             output_id = current_id + i
 
@@ -156,7 +155,6 @@ class Inferencer(BaseTrainer):
             if self.save_path is not None:
                 # you can use safetensors or other lib here
                 torch.save(output, self.save_path / part / f"output_{output_id}.pth")
-
         return batch
 
     def _inference_part(self, part, dataloader):
