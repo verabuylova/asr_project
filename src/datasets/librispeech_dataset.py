@@ -8,7 +8,7 @@ import wget
 from tqdm import tqdm
 
 from src.datasets.base_dataset import BaseDataset
-from src.utils.io_utils import ROOT_PATH
+ROOT_PATH = Path("/kaggle/input/librispeech")
 
 URL_LINKS = {
     "dev-clean": "https://www.openslr.org/resources/12/dev-clean.tar.gz",
@@ -24,11 +24,15 @@ URL_LINKS = {
 class LibrispeechDataset(BaseDataset):
     def __init__(self, part, data_dir=None, *args, **kwargs):
         assert part in URL_LINKS or part == "train_all"
-
+        
+        index_path = Path("/kaggle/working/asr_project/data_index")
+        
+        index_path.mkdir(exist_ok=True, parents=True)
+        
         if data_dir is None:
-            data_dir = ROOT_PATH / "data" / "datasets" / "librispeech"
-            data_dir.mkdir(exist_ok=True, parents=True)
+            data_dir = ROOT_PATH
         self._data_dir = data_dir
+        self._index_dir = index_path
         if part == "train_all":
             index = sum(
                 [
@@ -54,7 +58,8 @@ class LibrispeechDataset(BaseDataset):
         shutil.rmtree(str(self._data_dir / "LibriSpeech"))
 
     def _get_or_load_index(self, part):
-        index_path = self._data_dir / f"{part}_index.json"
+        #index_path = self._data_dir / f"{part}_index.json"
+        index_path = self._index_dir / f"{part}_index.json"
         if index_path.exists():
             with index_path.open() as f:
                 index = json.load(f)
