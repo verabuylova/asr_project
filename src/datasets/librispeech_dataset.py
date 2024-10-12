@@ -25,7 +25,7 @@ class LibrispeechDataset(BaseDataset):
     def __init__(self, part, data_dir=None, *args, **kwargs):
         assert part in URL_LINKS or part == "train_all"
         
-        index_path = Path("/kaggle/working/asr_project/data_index")
+        index_path = Path("/kaggle/working/hw_asr/data_index")
         
         index_path.mkdir(exist_ok=True, parents=True)
         
