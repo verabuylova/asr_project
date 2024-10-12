@@ -14,7 +14,6 @@ datasets
 wget
 editdistance
 pyctcdecode
-kenlm
 
 black
 isort
