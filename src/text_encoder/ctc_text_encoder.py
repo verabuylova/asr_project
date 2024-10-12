@@ -62,12 +62,14 @@ class CTCTextEncoder:
 
     def ctc_decode(self, inds) -> str:
         decoded = []
-        last_char_ind = self.char2ind[self.EMPTY_TOK]
+        empty_ind = self.char2ind[self.EMPTY_TOK]
+        last_char_ind = empty_ind
         for ind in inds:
             if ind == last_char_ind:
                 continue
-            elif ind != self.char2ind[self.EMPTY_TOK]:
-                decoded.append(self.ind2char[ind])
+            else:
+                if ind != empty_ind:
+                    decoded.append(self.ind2char[ind])
             last_char_ind = ind
         return "".join(decoded)
 
