@@ -2,21 +2,32 @@ import torch
 from torch import nn
 from torch.nn import Sequential, BatchNorm1d
 
+import torch
+from torch import nn
+from torch.nn import Sequential, BatchNorm1d
+
 class GRUWithBatchNorm(nn.Module):
     def __init__(self, input_size, hidden_size):
         super(GRUWithBatchNorm, self).__init__()
+        self.batchnorm_input = BatchNorm1d(input_size) 
+        self.relu = nn.ReLU()
         self.gru = nn.GRU(input_size, hidden_size, bidirectional=True)
-        self.batchnorm = BatchNorm1d(hidden_size)
+        self.batchnorm_output = BatchNorm1d(hidden_size)
 
     def forward(self, x):
+        T, N = x.shape[0], x.shape[1]
+        x = x.view(T * N, -1)
+        x = self.batchnorm_input(x)
+        x = self.relu(x)
+        x = x.view(T, N, -1)
         x, _ = self.gru(x)
         x = x.view(x.shape[0], x.shape[1], 2, -1).sum(2)
-        T, N = x.shape[0], x.shape[1] 
+        T, N = x.shape[0], x.shape[1]
         x = x.view(T * N, -1)
-        x = self.batchnorm(x) 
-        # [T, N, hidden_size]
+        x = self.batchnorm_output(x)
         x = x.view(T, N, -1)
         return x
+
 
 
 class DeepSpeech2Model(nn.Module):
@@ -69,7 +80,12 @@ class DeepSpeech2Model(nn.Module):
         x = x.view(T, N, -1)
         x = x.transpose(0, 1)  # [N, T, n_tokens]
 
-        return {'log_probs': nn.functional.log_softmax(x, dim=-1), 'log_probs_length': self.transform_input_lengths(spectrogram_length)}
+        length = self.transform_input_lengths(spectrogram_length)
+
+        return {'log_probs': nn.functional.log_softmax(x, dim=-1), 
+                'log_probs_length': length, 
+                'probs': nn.functional.softmax(x, dim=-1), 
+                'probs_length': length}
 
     def transform_input_lengths(self, input_lengths):
         for i in range(3):

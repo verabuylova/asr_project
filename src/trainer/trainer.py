@@ -76,7 +76,7 @@ class Trainer(BaseTrainer):
         self.writer.add_image("spectrogram", image)
 
     def log_predictions(
-        self, text, log_probs, log_probs_length, audio_path, examples_to_log=10, **batch
+        self, text, log_probs, probs, log_probs_length, audio_path, examples_to_log=10, **batch
     ):
         # TODO add beam search
         # Note: by improving text encoder and metrics design
@@ -91,11 +91,11 @@ class Trainer(BaseTrainer):
         argmax_texts_raw = [self.text_encoder.decode(inds) for inds in argmax_inds]
         argmax_texts = [self.text_encoder.ctc_decode(inds) for inds in argmax_inds]
 
-        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs_element[:log_probs_length_element], 4) 
-                    for (log_probs_element, log_probs_length_element) in zip(log_probs, log_probs_length)]
+        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], 4) 
+                    for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
         
-        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs_element[:log_probs_length_element], 4) 
-                    for (log_probs_element, log_probs_length_element) in zip(log_probs, log_probs_length)]
+        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs, probs_element[:log_probs_length_element], 50) 
+                    for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
         
 
         tuples = list(zip(argmax_texts, preds_bs, preds_bs_lm, text, argmax_texts_raw, audio_path))

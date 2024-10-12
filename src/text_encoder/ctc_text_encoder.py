@@ -61,27 +61,26 @@ class CTCTextEncoder:
         return "".join([self.ind2char[int(ind)] for ind in inds]).strip()
 
     def ctc_decode(self, inds) -> str:
-    
-        collapsed_inds = []
-        prev = None
+        decoded = []
+        last_char_ind = self.char2ind[self.EMPTY_TOK]
         for ind in inds:
-            ind = int(ind)
-            if ind != prev:
-                collapsed_inds.append(ind)
-                prev = ind
+            if ind == last_char_ind:
+                continue
+            elif ind != self.char2ind[self.EMPTY_TOK]:
+                decoded.append(self.ind2char[ind])
+            last_char_ind = ind
+        return "".join(decoded)
 
-        empty_i = self.char2ind[self.EMPTY_TOK]
-        return "".join([self.ind2char[int(ind)] for ind in collapsed_inds if int(ind) != empty_i]).strip()
 
-    def ctc_beam_search(self, use_lm: bool, log_probs: torch.tensor, beam_size: int):
+    def ctc_beam_search(self, use_lm: bool, log_probs: torch.tensor, probs: torch.tensor, beam_size: int):
         if use_lm:
-            if isinstance(log_probs, torch.Tensor):
-                log_probs = log_probs.detach().cpu().numpy()
-            return self.decoder_lm.decode(log_probs, beam_size).lower()
+            if isinstance(probs, torch.Tensor):
+                probs = probs.detach().cpu().numpy()
+            return self.decoder_lm.decode(probs, 50).lower()
         else:
-            if isinstance(log_probs, torch.Tensor):
-                log_probs = log_probs.detach().cpu().numpy()
-            return self.decoder_no_lm.decode(log_probs, beam_size).lower()
+            if isinstance(probs, torch.Tensor):
+                probs = probs.detach().cpu().numpy()
+            return self.decoder_no_lm.decode(probs, 10).lower()
         
         dp = {
             ('', self.EMPTY_TOK): 1.0

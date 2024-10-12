@@ -141,9 +141,10 @@ class Inferencer(BaseTrainer):
             # clone because of
             # https://github.com/pytorch/pytorch/issues/1995
             logits = batch["log_probs"][i].clone()
+            probs = batch["probs"][i].clone()
             length = batch["log_probs_length"][i].clone()
             label = batch["text"][i]
-            pred_label = self.text_encoder.ctc_beam_search(True, logits[:length], 4) 
+            pred_label = self.text_encoder.ctc_beam_search(True, logits[:length], probs[:length], 50) 
 
             output_id = current_id + i
 
