@@ -56,13 +56,13 @@ class BeamSearchLMWERMetric(BaseMetric):
         self.type = type
         self.beam_size = beam_size
 
-    def __call__(self, log_probs: Tensor, probs: Tensor, log_probs_length: Tensor, text: List[str], **kwargs):
+    def __call__(self, log_probs: Tensor, probs: Tensor, logits: Tensor, log_probs_length: Tensor, text: List[str], **kwargs):
         wers = []
-        probs_ = probs.detach().cpu().numpy()
+        probs_ = logits.detach().cpu().numpy()
         lengths = log_probs_length.detach().numpy()
         for prob, length, target_text in zip(probs_, lengths, text):
             target_text = self.text_encoder.normalize_text(target_text)
-            pred_text = self.text_encoder.ctc_beam_search(True, log_probs, prob[:length], 10)
+            pred_text = self.text_encoder.ctc_beam_search(True, logits, prob[:length], 10)
             wers.append(calc_wer(target_text, pred_text))
         return sum(wers) / len(wers)
     

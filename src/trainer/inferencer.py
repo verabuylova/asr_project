@@ -140,7 +140,7 @@ class Inferencer(BaseTrainer):
         for i in range(batch_size):
             # clone because of
             # https://github.com/pytorch/pytorch/issues/1995
-            logits = batch["log_probs"][i].clone()
+            logits = batch["logits"][i].clone()
             probs = batch["probs"][i].clone()
             length = batch["log_probs_length"][i].clone()
             label = batch["text"][i]

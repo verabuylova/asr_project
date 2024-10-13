@@ -76,11 +76,11 @@ class CTCTextEncoder:
         return "".join(decoded)
 
 
-    def ctc_beam_search(self, use_lm: bool, log_probs: torch.tensor, probs: torch.tensor, beam_size: int):
+    def ctc_beam_search(self, use_lm: bool, log_probs: torch.tensor, probs: torch.tensor, logits: torch.tensor, beam_size: int):
         if use_lm:
-            if isinstance(probs, torch.Tensor):
-                probs = probs.detach().cpu().numpy()
-            return self.decoder_lm.decode(probs, 10).lower()
+            if isinstance(logits, torch.Tensor):
+                logits = logits.detach().cpu().numpy()
+            return self.decoder_lm.decode(logits, 10).lower()
         else:
             if isinstance(probs, torch.Tensor):
                 probs = probs.detach().cpu().numpy()

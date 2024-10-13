@@ -64,7 +64,7 @@ class Trainer(BaseTrainer):
 
         for met in metric_funcs:
             if met.name in ["CER_(BS)", "WER_(BS)", "CER_(BS_LM)", "WER_(BS_LM)"]:
-                if self.current_epoch % 5 == 0: 
+                if self.current_epoch % 1 == 0: 
                     metrics.update(met.name, met(**batch))
             else:
                 metrics.update(met.name, met(**batch))
@@ -100,7 +100,7 @@ class Trainer(BaseTrainer):
         self.writer.add_image("spectrogram", image)
 
     def log_predictions(
-        self, text, log_probs, probs, log_probs_length, audio_path, examples_to_log=10, **batch
+        self, text, log_probs, probs, logits, log_probs_length, audio_path, examples_to_log=10, **batch
     ):
         # TODO add beam search
         # Note: by improving text encoder and metrics design
@@ -118,8 +118,8 @@ class Trainer(BaseTrainer):
         preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], 10) 
                     for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
         
-        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs, probs_element[:log_probs_length_element], 10) 
-                    for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
+        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, logits, probs_element[:log_probs_length_element], 10) 
+                    for (probs_element, log_probs_length_element) in zip(logits, log_probs_length)]
         
 
         tuples = list(zip(argmax_texts, preds_bs, preds_bs_lm, text, argmax_texts_raw, audio_path))

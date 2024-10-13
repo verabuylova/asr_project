@@ -74,6 +74,7 @@ class DeepSpeech2Model(nn.Module):
 
         return {'log_probs': nn.functional.log_softmax(x, dim=-1), 
                 'log_probs_length': length, 
+                'logits': x,
                 'probs': nn.functional.softmax(x, dim=-1), 
                 'probs_length': length}
 
