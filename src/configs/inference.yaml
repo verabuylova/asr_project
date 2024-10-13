@@ -1,9 +1,9 @@
 defaults:
   - model: deepspeech2
   - metrics: base
-  - datasets: inference # we do not want to run inference on training data
+  - datasets: inference_other # we do not want to run inference on training data
   - dataloader: base
-  - transforms: example_only_instance
+  - transforms: base_only_instance
   - _self_
 inferencer:
   device_tensors: ["data_object", "labels"] # which tensors should be on device (ex. GPU)
