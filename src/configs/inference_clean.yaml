@@ -2,7 +2,7 @@ defaults:
   - model: deepspeech2
   - metrics: base
   - datasets: inference_clean # we do not want to run inference on training data
-  - dataloader: inference_clean
+  - dataloader: base
   - transforms: base_only_instance
   - _self_
 
