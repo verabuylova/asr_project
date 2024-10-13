@@ -13,7 +13,7 @@ writer:
   - loss
   log_checkpoints: false
   id_length: 8
-  run_id: 38kuo9ko
+  run_id: fsdon71j
 metrics:
   train: []
   inference:
