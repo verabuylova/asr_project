@@ -1,282 +1,557 @@
-import logging
-import random
+from abc import abstractmethod
 
-import numpy as np
 import torch
-import torchaudio
-from torch.utils.data import Dataset
+from numpy import inf
+from torch.nn.utils import clip_grad_norm_
+from tqdm.auto import tqdm
 
-from src.text_encoder import CTCTextEncoder
+from src.datasets.data_utils import inf_loop
+from src.metrics.tracker import MetricTracker
+from src.utils.io_utils import ROOT_PATH
 
-logger = logging.getLogger(__name__)
 
-
-class BaseDataset(Dataset):
+class BaseTrainer:
     """
-    Base class for the datasets.
-
-    Given a proper index (list[dict]), allows to process different datasets
-    for the same task in the identical manner. Therefore, to work with
-    several datasets, the user only have to define index in a nested class.
+    Base class for all trainers.
     """
 
     def __init__(
         self,
-        index,
-        text_encoder=None,
-        target_sr=16000,
-        limit=None,
-        max_audio_length=None,
-        max_text_length=None,
-        shuffle_index=False,
-        instance_transforms=None,
+        model,
+        criterion,
+        metrics,
+        optimizer,
+        lr_scheduler,
+        text_encoder,
+        config,
+        device,
+        dataloaders,
+        logger,
+        writer,
+        epoch_len=None,
+        skip_oom=True,
+        batch_transforms=None,
     ):
         """
         Args:
-            index (list[dict]): list, containing dict for each element of
-                the dataset. The dict has required metadata information,
-                such as label and object path.
+            model (nn.Module): PyTorch model.
+            criterion (nn.Module): loss function for model training.
+            metrics (dict): dict with the definition of metrics for training
+                (metrics[train]) and inference (metrics[inference]). Each
+                metric is an instance of src.metrics.BaseMetric.
+            optimizer (Optimizer): optimizer for the model.
+            lr_scheduler (LRScheduler): learning rate scheduler for the
+                optimizer.
             text_encoder (CTCTextEncoder): text encoder.
-            target_sr (int): supported sample rate.
-            limit (int | None): if not None, limit the total number of elements
-                in the dataset to 'limit' elements.
-            max_audio_length (int): maximum allowed audio length.
-            max_test_length (int): maximum allowed text length.
-            shuffle_index (bool): if True, shuffle the index. Uses python
-                random package with seed 42.
-            instance_transforms (dict[Callable] | None): transforms that
-                should be applied on the instance. Depend on the
+            config (DictConfig): experiment config containing training config.
+            device (str): device for tensors and model.
+            dataloaders (dict[DataLoader]): dataloaders for different
+                sets of data.
+            logger (Logger): logger that logs output.
+            writer (WandBWriter | CometMLWriter): experiment tracker.
+            epoch_len (int | None): number of steps in each epoch for
+                iteration-based training. If None, use epoch-based
+                training (len(dataloader)).
+            skip_oom (bool): skip batches with the OutOfMemory error.
+            batch_transforms (dict[Callable] | None): transforms that
+                should be applied on the whole batch. Depend on the
                 tensor name.
         """
-        self._assert_index_is_valid(index)
+        self.is_train = True
 
-        index = self._filter_records_from_dataset(
-            index, max_audio_length, max_text_length
-        )
-        index = self._shuffle_and_limit_index(index, limit, shuffle_index)
-        if not shuffle_index:
-            index = self._sort_index(index)
+        self.config = config
+        self.cfg_trainer = self.config.trainer
 
-        self._index: list[dict] = index
+        self.device = device
+        self.skip_oom = skip_oom
 
+        self.logger = logger
+        self.log_step = config.trainer.get("log_step", 50)
+
+        self.model = model
+        self.criterion = criterion
+        self.optimizer = optimizer
+        self.lr_scheduler = lr_scheduler
         self.text_encoder = text_encoder
-        self.target_sr = target_sr
-        self.instance_transforms = instance_transforms
+        self.batch_transforms = batch_transforms
 
-    def __getitem__(self, ind):
-        """
-        Get element from the index, preprocess it, and combine it
-        into a dict.
+        # define dataloaders
+        self.train_dataloader = dataloaders["train"]
+        if epoch_len is None:
+            # epoch-based training
+            self.epoch_len = len(self.train_dataloader)
+        else:
+            # iteration-based training
+            self.train_dataloader = inf_loop(self.train_dataloader)
+            self.epoch_len = epoch_len
 
-        Notice that the choice of key names is defined by the template user.
-        However, they should be consistent across dataset getitem, collate_fn,
-        loss_function forward method, and model forward method.
-
-        Args:
-            ind (int): index in the self.index list.
-        Returns:
-            instance_data (dict): dict, containing instance
-                (a single dataset element).
-        """
-        data_dict = self._index[ind]
-        audio_path = data_dict["path"]
-        audio = self.load_audio(audio_path)
-        text = data_dict["text"]
-        text_encoded = self.text_encoder.encode(text)
-
-        instance_data : dict = {
-            "audio": audio
+        self.evaluation_dataloaders = {
+            k: v for k, v in dataloaders.items() if k != "train"
         }
-        instance_data = self.preprocess_data(instance_data) # transforming audio first
 
-        spectrogram = self.get_spectrogram(instance_data["audio"]) # calculating spectrogram of the TRANSFORMED audio
-        spectrogram = torch.log(spectrogram + 1e-5) # for beautiful pictures when logging
+        # define epochs
+        self._last_epoch = 0  # required for saving on interruption
+        self.start_epoch = 1
+        self.epochs = self.cfg_trainer.n_epochs
 
-        instance_data.update(
-            {
-            "spectrogram": spectrogram,
-            "text": text,
-            "text_encoded": text_encoded,
-            "audio_path": audio_path,
-        }
+        # configuration to monitor model performance and save best
+
+        self.save_period = (
+            self.cfg_trainer.save_period
+        )  # checkpoint each save_period epochs
+        self.monitor = self.cfg_trainer.get(
+            "monitor", "off"
+        )  # format: "mnt_mode mnt_metric"
+
+        if self.monitor == "off":
+            self.mnt_mode = "off"
+            self.mnt_best = 0
+        else:
+            self.mnt_mode, self.mnt_metric = self.monitor.split()
+            assert self.mnt_mode in ["min", "max"]
+
+            self.mnt_best = inf if self.mnt_mode == "min" else -inf
+            self.early_stop = self.cfg_trainer.get("early_stop", inf)
+            if self.early_stop <= 0:
+                self.early_stop = inf
+
+        # setup visualization writer instance
+        self.writer = writer
+
+        # define metrics
+        self.metrics = metrics
+        self.train_metrics = MetricTracker(
+            *self.config.writer.loss_names,
+            "grad_norm",
+            *[m.name for m in self.metrics["train"]],
+            writer=self.writer,
+        )
+        self.evaluation_metrics = MetricTracker(
+            *self.config.writer.loss_names,
+            *[m.name for m in self.metrics["inference"]],
+            writer=self.writer,
         )
 
-        # TODO think of how to apply wave augs before calculating spectrogram
-        # Note: you may want to preserve both audio in time domain and
-        # in time-frequency domain for logging
-        # DONE
+        # define checkpoint dir and init everything if required
 
-        return instance_data
+        self.checkpoint_dir = (
+            ROOT_PATH / config.trainer.save_dir / config.writer.run_name
+        )
 
-    def __len__(self):
+        if config.trainer.get("resume_from") is not None:
+            # resume_path = self.checkpoint_dir / config.trainer.resume_from
+            resume_path = ROOT_PATH / config.trainer.resume_from # чтобы просто надо было указывать путь до файла с конфигом
+            self._resume_checkpoint(resume_path)
+
+        if config.trainer.get("from_pretrained") is not None:
+            self._from_pretrained(config.trainer.get("from_pretrained")) # просто путь до предобученной модели
+
+    def train(self):
         """
-        Get length of the dataset (length of the index).
+        Wrapper around training process to save model on keyboard interrupt.
         """
-        return len(self._index)
+        try:
+            self._train_process()
+        except KeyboardInterrupt as e:
+            self.logger.info("Saving model on keyboard interrupt")
+            self._save_checkpoint(self._last_epoch, save_best=False)
+            raise e
 
-    def load_audio(self, path):
-        audio_tensor, sr = torchaudio.load(path)
-        audio_tensor = audio_tensor[0:1, :]  # remove all channels but the first
-        target_sr = self.target_sr
-        if sr != target_sr:
-            audio_tensor = torchaudio.functional.resample(audio_tensor, sr, target_sr)
-        return audio_tensor
-
-    def get_spectrogram(self, audio):
+    def _train_process(self):
         """
-        Special instance transform with a special key to
-        get spectrogram from audio.
+        Full training logic:
 
-        Args:
-            audio (Tensor): original audio.
-        Returns:
-            spectrogram (Tensor): spectrogram for the audio.
+        Training model for an epoch, evaluating it on non-train partitions,
+        and monitoring the performance improvement (for early stopping
+        and saving the best checkpoint).
         """
-        return self.instance_transforms["get_spectrogram"](audio)
+        not_improved_count = 0
+        for epoch in range(self.start_epoch, self.epochs + 1):
+            self._last_epoch = epoch
+            result = self._train_epoch(epoch)
 
-    def preprocess_data(self, instance_data):
-        """
-        Preprocess data with instance transforms.
+            # save logged information into logs dict
+            logs = {"epoch": epoch}
+            logs.update(result)
 
-        Each tensor in a dict undergoes its own transform defined by the key.
+            # print logged information to the screen
+            for key, value in logs.items():
+                self.logger.info(f"    {key:15s}: {value}")
 
-        Args:
-            instance_data (dict): dict, containing instance
-                (a single dataset element).
-        Returns:
-            instance_data (dict): dict, containing instance
-                (a single dataset element) (possibly transformed via
-                instance transform).
-        """
-        if self.instance_transforms is not None:
-            for transform_name in self.instance_transforms.keys():
-                if transform_name == "get_spectrogram":
-                    continue  # skip special key
-                instance_data[transform_name] = self.instance_transforms[
-                    transform_name
-                ](instance_data[transform_name])
-        return instance_data
-
-    @staticmethod
-    def _filter_records_from_dataset(
-        index: list,
-        max_audio_length,
-        max_text_length,
-    ) -> list:
-        """
-        Filter some of the elements from the dataset depending on
-        the desired max_test_length or max_audio_length.
-
-        Args:
-            index (list[dict]): list, containing dict for each element of
-                the dataset. The dict has required metadata information,
-                such as label and object path.
-            max_audio_length (int): maximum allowed audio length.
-            max_test_length (int): maximum allowed text length.
-        Returns:
-            index (list[dict]): list, containing dict for each element of
-                the dataset that satisfied the condition. The dict has
-                required metadata information, such as label and object path.
-        """
-        initial_size = len(index)
-        if max_audio_length is not None:
-            exceeds_audio_length = (
-                np.array([el["audio_len"] for el in index]) >= max_audio_length
+            # evaluate model performance according to configured metric,
+            # save best checkpoint as model_best
+            best, stop_process, not_improved_count = self._monitor_performance(
+                logs, not_improved_count
             )
-            _total = exceeds_audio_length.sum()
-            logger.info(
-                f"{_total} ({_total / initial_size:.1%}) records are longer then "
-                f"{max_audio_length} seconds. Excluding them."
-            )
-        else:
-            exceeds_audio_length = False
 
-        initial_size = len(index)
-        if max_text_length is not None:
-            exceeds_text_length = (
-                np.array(
-                    [len(CTCTextEncoder.normalize_text(el["text"])) for el in index]
+            if epoch % self.save_period == 0 or best:
+                self._save_checkpoint(epoch, save_best=best, only_best=True)
+
+            if stop_process:  # early_stop
+                break
+
+    def _train_epoch(self, epoch):
+        """
+        Training logic for an epoch, including logging and evaluation on
+        non-train partitions.
+
+        Args:
+            epoch (int): current training epoch.
+        Returns:
+            logs (dict): logs that contain the average loss and metric in
+                this epoch.
+        """
+        self.is_train = True
+        self.model.train()
+        self.train_metrics.reset()
+        self.writer.set_step((epoch - 1) * self.epoch_len)
+        self.writer.add_scalar("epoch", epoch)
+        for batch_idx, batch in enumerate(
+            tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
+        ):
+            try:
+                batch = self.process_batch(
+                    batch,
+                    metrics=self.train_metrics,
                 )
-                >= max_text_length
+            except torch.cuda.OutOfMemoryError as e:
+                if self.skip_oom:
+                    self.logger.warning("OOM on batch. Skipping batch.")
+                    torch.cuda.empty_cache()  # free some memory
+                    continue
+                else:
+                    raise e
+
+            self.train_metrics.update("grad_norm", self._get_grad_norm())
+
+            # log current results
+            if batch_idx % self.log_step == 0:
+                self.writer.set_step((epoch - 1) * self.epoch_len + batch_idx)
+                self.logger.debug(
+                    "Train Epoch: {} {} Loss: {:.6f}".format(
+                        epoch, self._progress(batch_idx), batch["loss"].item()
+                    )
+                )
+                self.writer.add_scalar(
+                    "learning rate", self.lr_scheduler.get_last_lr()[0]
+                )
+                self._log_scalars(self.train_metrics)
+                self._log_batch(batch_idx, batch)
+                # we don't want to reset train metrics at the start of every epoch
+                # because we are interested in recent train metrics
+                last_train_metrics = self.train_metrics.result()
+                self.train_metrics.reset()
+            if batch_idx + 1 >= self.epoch_len:
+                break
+
+        logs = last_train_metrics
+
+        # Run val/test
+        for part, dataloader in self.evaluation_dataloaders.items():
+            val_logs = self._evaluation_epoch(epoch, part, dataloader)
+            logs.update(**{f"{part}_{name}": value for name, value in val_logs.items()})
+
+        return logs
+
+    def _evaluation_epoch(self, epoch, part, dataloader):
+        """
+        Evaluate model on the partition after training for an epoch.
+
+        Args:
+            epoch (int): current training epoch.
+            part (str): partition to evaluate on
+            dataloader (DataLoader): dataloader for the partition.
+        Returns:
+            logs (dict): logs that contain the information about evaluation.
+        """
+        self.is_train = False
+        self.model.eval()
+        self.evaluation_metrics.reset()
+        with torch.no_grad():
+            for batch_idx, batch in tqdm(
+                enumerate(dataloader),
+                desc=part,
+                total=len(dataloader),
+            ):
+                batch = self.process_batch(
+                    batch,
+                    metrics=self.evaluation_metrics,
+                )
+            self.writer.set_step(epoch * self.epoch_len, part)
+            self._log_scalars(self.evaluation_metrics)
+            self._log_batch(
+                batch_idx, batch, part
+            )  # log only the last batch during inference
+
+        return self.evaluation_metrics.result()
+
+    def _monitor_performance(self, logs, not_improved_count):
+        """
+        Check if there is an improvement in the metrics. Used for early
+        stopping and saving the best checkpoint.
+
+        Args:
+            logs (dict): logs after training and evaluating the model for
+                an epoch.
+            not_improved_count (int): the current number of epochs without
+                improvement.
+        Returns:
+            best (bool): if True, the monitored metric has improved.
+            stop_process (bool): if True, stop the process (early stopping).
+                The metric did not improve for too much epochs.
+            not_improved_count (int): updated number of epochs without
+                improvement.
+        """
+        best = False
+        stop_process = False
+        if self.mnt_mode != "off":
+            try:
+                # check whether model performance improved or not,
+                # according to specified metric(mnt_metric)
+                if self.mnt_mode == "min":
+                    improved = logs[self.mnt_metric] <= self.mnt_best
+                elif self.mnt_mode == "max":
+                    improved = logs[self.mnt_metric] >= self.mnt_best
+                else:
+                    improved = False
+            except KeyError:
+                self.logger.warning(
+                    f"Warning: Metric '{self.mnt_metric}' is not found. "
+                    "Model performance monitoring is disabled."
+                )
+                self.mnt_mode = "off"
+                improved = False
+
+            if improved:
+                self.mnt_best = logs[self.mnt_metric]
+                not_improved_count = 0
+                best = True
+            else:
+                not_improved_count += 1
+
+            if not_improved_count >= self.early_stop:
+                self.logger.info(
+                    "Validation performance didn't improve for {} epochs. "
+                    "Training stops.".format(self.early_stop)
+                )
+                stop_process = True
+        return best, stop_process, not_improved_count
+
+    def move_batch_to_device(self, batch):
+        """
+        Move all necessary tensors to the device.
+
+        Args:
+            batch (dict): dict-based batch containing the data from
+                the dataloader.
+        Returns:
+            batch (dict): dict-based batch containing the data from
+                the dataloader with some of the tensors on the device.
+        """
+        for tensor_for_device in self.cfg_trainer.device_tensors:
+            batch[tensor_for_device] = batch[tensor_for_device].to(self.device)
+        return batch
+
+    def transform_batch(self, batch):
+        """
+        Transforms elements in batch. Like instance transform inside the
+        BaseDataset class, but for the whole batch. Improves pipeline speed,
+        especially if used with a GPU.
+
+        Each tensor in a batch undergoes its own transform defined by the key.
+
+        Args:
+            batch (dict): dict-based batch containing the data from
+                the dataloader.
+        Returns:
+            batch (dict): dict-based batch containing the data from
+                the dataloader (possibly transformed via batch transform).
+        """
+        # do batch transforms on device
+        transform_type = "train" if self.is_train else "inference"
+        transforms = self.batch_transforms.get(transform_type)
+        if transforms is not None:
+            for transform_name in transforms.keys():
+                batch[transform_name] = transforms[transform_name](
+                    batch[transform_name]
+                )
+        return batch
+
+    def _clip_grad_norm(self):
+        """
+        Clips the gradient norm by the value defined in
+        config.trainer.max_grad_norm
+        """
+        if self.config["trainer"].get("max_grad_norm", None) is not None:
+            clip_grad_norm_(
+                self.model.parameters(), self.config["trainer"]["max_grad_norm"]
             )
-            _total = exceeds_text_length.sum()
-            logger.info(
-                f"{_total} ({_total / initial_size:.1%}) records are longer then "
-                f"{max_text_length} characters. Excluding them."
+
+    @torch.no_grad()
+    def _get_grad_norm(self, norm_type=2):
+        """
+        Calculates the gradient norm for logging.
+
+        Args:
+            norm_type (float | str | None): the order of the norm.
+        Returns:
+            total_norm (float): the calculated norm.
+        """
+        parameters = self.model.parameters()
+        if isinstance(parameters, torch.Tensor):
+            parameters = [parameters]
+        parameters = [p for p in parameters if p.grad is not None]
+        total_norm = torch.norm(
+            torch.stack([torch.norm(p.grad.detach(), norm_type) for p in parameters]),
+            norm_type,
+        )
+        return total_norm.item()
+
+    def _progress(self, batch_idx):
+        """
+        Calculates the percentage of processed batch within the epoch.
+
+        Args:
+            batch_idx (int): the current batch index.
+        Returns:
+            progress (str): contains current step and percentage
+                within the epoch.
+        """
+        base = "[{}/{} ({:.0f}%)]"
+        if hasattr(self.train_dataloader, "n_samples"):
+            current = batch_idx * self.train_dataloader.batch_size
+            total = self.train_dataloader.n_samples
+        else:
+            current = batch_idx
+            total = self.epoch_len
+        return base.format(current, total, 100.0 * current / total)
+
+    @abstractmethod
+    def _log_batch(self, batch_idx, batch, mode="train"):
+        """
+        Abstract method. Should be defined in the nested Trainer Class.
+
+        Log data from batch. Calls self.writer.add_* to log data
+        to the experiment tracker.
+
+        Args:
+            batch_idx (int): index of the current batch.
+            batch (dict): dict-based batch after going through
+                the 'process_batch' function.
+            mode (str): train or inference. Defines which logging
+                rules to apply.
+        """
+        return NotImplementedError()
+
+    def _log_scalars(self, metric_tracker: MetricTracker):
+        """
+        Wrapper around the writer 'add_scalar' to log all metrics.
+
+        Args:
+            metric_tracker (MetricTracker): calculated metrics.
+        """
+        if self.writer is None:
+            return
+        for metric_name in metric_tracker.keys():
+            self.writer.add_scalar(f"{metric_name}", metric_tracker.avg(metric_name))
+
+    def _save_checkpoint(self, epoch, save_best=False, only_best=False):
+        """
+        Save the checkpoints.
+
+        Args:
+            epoch (int): current epoch number.
+            save_best (bool): if True, rename the saved checkpoint to 'model_best.pth'.
+            only_best (bool): if True and the checkpoint is the best, save it only as
+                'model_best.pth'(do not duplicate the checkpoint as
+                checkpoint-epochEpochNumber.pth)
+        """
+        arch = type(self.model).__name__
+        state = {
+            "arch": arch,
+            "epoch": epoch,
+            "state_dict": self.model.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "lr_scheduler": self.lr_scheduler.state_dict(),
+            "monitor_best": self.mnt_best,
+            "config": self.config,
+        }
+        filename = str(self.checkpoint_dir / f"checkpoint-epoch{epoch}.pth")
+        if not (only_best and save_best):
+            torch.save(state, filename)
+            if self.config.writer.log_checkpoints:
+                self.writer.add_checkpoint(filename, str(self.checkpoint_dir.parent))
+            self.logger.info(f"Saving checkpoint: {filename} ...")
+        if save_best:
+            best_path = str(self.checkpoint_dir / "model_best.pth")
+            torch.save(state, best_path)
+            if self.config.writer.log_checkpoints:
+                self.writer.add_checkpoint(best_path, str(self.checkpoint_dir.parent))
+            self.logger.info("Saving current best: model_best.pth ...")
+
+    def _resume_checkpoint(self, resume_path):
+        """
+        Resume from a saved checkpoint (in case of server crash, etc.).
+        The function loads state dicts for everything, including model,
+        optimizers, etc.
+
+        Notice that the checkpoint should be located in the current experiment
+        saved directory (where all checkpoints are saved in '_save_checkpoint').
+
+        Args:
+            resume_path (str): Path to the checkpoint to be resumed.
+        """
+        resume_path = str(resume_path)
+        self.logger.info(f"Loading checkpoint: {resume_path} ...")
+        checkpoint = torch.load(resume_path, self.device)
+        self.start_epoch = checkpoint["epoch"] + 1
+        self.mnt_best = checkpoint["monitor_best"]
+
+        # load architecture params from checkpoint.
+        if checkpoint["config"]["model"] != self.config["model"]:
+            self.logger.warning(
+                "Warning: Architecture configuration given in the config file is different from that "
+                "of the checkpoint. This may yield an exception when state_dict is loaded."
+            )
+        self.model.load_state_dict(checkpoint["state_dict"])
+
+        # load optimizer state from checkpoint only when optimizer type is not changed.
+        if (
+            checkpoint["config"]["optimizer"] != self.config["optimizer"]
+            or checkpoint["config"]["lr_scheduler"] != self.config["lr_scheduler"]
+        ):
+            self.logger.warning(
+                "Warning: Optimizer or lr_scheduler given in the config file is different "
+                "from that of the checkpoint. Optimizer and scheduler parameters "
+                "are not resumed."
             )
         else:
-            exceeds_text_length = False
+            self.optimizer.load_state_dict(checkpoint["optimizer"])
+            self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
 
-        records_to_filter = exceeds_text_length | exceeds_audio_length
+        self.logger.info(
+            f"Checkpoint loaded. Resume training from epoch {self.start_epoch}"
+        )
 
-        if records_to_filter is not False and records_to_filter.any():
-            _total = records_to_filter.sum()
-            index = [el for el, exclude in zip(index, records_to_filter) if not exclude]
-            logger.info(
-                f"Filtered {_total} ({_total / initial_size:.1%}) records  from dataset"
-            )
-
-        return index
-
-    @staticmethod
-    def _assert_index_is_valid(index):
+    def _from_pretrained(self, pretrained_path):
         """
-        Check the structure of the index and ensure it satisfies the desired
-        conditions.
+        Init model with weights from pretrained pth file.
+
+        Notice that 'pretrained_path' can be any path on the disk. It is not
+        necessary to locate it in the experiment saved dir. The function
+        initializes only the model.
 
         Args:
-            index (list[dict]): list, containing dict for each element of
-                the dataset. The dict has required metadata information,
-                such as label and object path.
+            pretrained_path (str): path to the model state dict.
         """
-        for entry in index:
-            assert "path" in entry, (
-                "Each dataset item should include field 'path'" " - path to audio file."
-            )
-            assert "text" in entry, (
-                "Each dataset item should include field 'text'"
-                " - object ground-truth transcription."
-            )
-            assert "audio_len" in entry, (
-                "Each dataset item should include field 'audio_len'"
-                " - length of the audio."
-            )
+        pretrained_path = str(pretrained_path)
+        if hasattr(self, "logger"):  # to support both trainer and inferencer
+            self.logger.info(f"Loading model weights from: {pretrained_path} ...")
+        else:
+            print(f"Loading model weights from: {pretrained_path} ...")
+        checkpoint = torch.load(pretrained_path, self.device)
 
-    @staticmethod
-    def _sort_index(index):
-        """
-        Sort index by audio length.
-
-        Args:
-            index (list[dict]): list, containing dict for each element of
-                the dataset. The dict has required metadata information,
-                such as label and object path.
-        Returns:
-            index (list[dict]): sorted list, containing dict for each element
-                of the dataset. The dict has required metadata information,
-                such as label and object path.
-        """
-        return sorted(index, key=lambda x: x["audio_len"])
-
-    @staticmethod
-    def _shuffle_and_limit_index(index, limit, shuffle_index):
-        """
-        Shuffle elements in index and limit the total number of elements.
-
-        Args:
-            index (list[dict]): list, containing dict for each element of
-                the dataset. The dict has required metadata information,
-                such as label and object path.
-            limit (int | None): if not None, limit the total number of elements
-                in the dataset to 'limit' elements.
-            shuffle_index (bool): if True, shuffle the index. Uses python
-                random package with seed 42.
-        """
-        if shuffle_index:
-            random.seed(42)
-            random.shuffle(index)
-
-        if limit is not None:
-            index = index[:limit]
-        return index
-
+        if checkpoint.get("state_dict") is not None:
+            self.model.load_state_dict(checkpoint["state_dict"])
+        else:
+            self.model.load_state_dict(checkpoint)
