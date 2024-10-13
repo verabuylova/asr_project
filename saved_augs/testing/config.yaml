@@ -1,0 +1,135 @@
+model:
+  _target_: src.model.deepspeech2_model.DeepSpeech2Model
+  n_feats: 128
+  fc_hidden: 512
+  n_tokens: 28
+writer:
+  _target_: src.logger.WandBWriter
+  project_name: pytorch_template_asr_example
+  entity: null
+  run_name: testing
+  mode: online
+  loss_names:
+  - loss
+  log_checkpoints: false
+  id_length: 8
+  run_id: gi1mjnk8
+metrics:
+  train: []
+  inference:
+  - _target_: src.metrics.ArgmaxCERMetric
+    name: CER_(Argmax)
+  - _target_: src.metrics.ArgmaxWERMetric
+    name: WER_(Argmax)
+  - _target_: src.metrics.BeamSearchCERMetric
+    name: CER_(BS)
+  - _target_: src.metrics.BeamSearchWERMetric
+    name: WER_(BS)
+  - _target_: src.metrics.BeamSearchLMCERMetric
+    name: CER_(BS_LM)
+  - _target_: src.metrics.BeamSearchLMCERMetric
+    name: WER_(BS_LM
+datasets:
+  train:
+    _target_: src.datasets.LibrispeechDataset
+    part: dev-clean
+    max_audio_length: 20.0
+    max_text_length: 200
+    limit: 2
+    instance_transforms: ${transforms.instance_transforms.train}
+  val:
+    _target_: src.datasets.LibrispeechDataset
+    part: dev-clean
+    max_audio_length: 20.0
+    max_text_length: 200
+    limit: 2
+    instance_transforms: ${transforms.instance_transforms.inference}
+dataloader:
+  _target_: torch.utils.data.DataLoader
+  batch_size: 2
+  num_workers: 1
+  pin_memory: true
+transforms:
+  batch_transforms:
+    train:
+      spectrogram:
+        _target_: torch.nn.Sequential
+        _args_:
+        - _target_: src.transforms.spec_augs.TimeMasking
+          time_mask_param: 20
+          p: 0.2
+        - _target_: src.transforms.spec_augs.FrequencyMasking
+          freq_mask_param: 30
+          p: 0.2
+  instance_transforms:
+    train:
+      get_spectrogram:
+        _target_: torchaudio.transforms.MelSpectrogram
+        sample_rate: 16000
+        n_fft: 512
+      audio:
+        _target_: src.transforms.ChooseTransform
+        p: 0.6
+        transforms:
+          _target_: torchvision.transforms.v2.Compose
+          transforms:
+          - _target_: src.transforms.wav_augs.Gain
+            p: 1.0
+          - _target_: src.transforms.wav_augs.ColoredNoise
+            p: 1.0
+            min_snr_in_db: 10
+            max_snr_in_db: 20
+            sample_rate: 16000
+          - _target_: src.transforms.wav_augs.BandPass
+            p: 1.0
+            sample_rate: 16000
+            min_bandwidth_fraction: 1.1
+            min_center_frequency: 1900
+            max_center_frequency: 2100
+          - _target_: src.transforms.wav_augs.BandStop
+            p: 1.0
+            sample_rate: 16000
+            max_bandwidth_fraction: 1.2
+            min_center_frequency: 1900
+            max_center_frequency: 2100
+          - _target_: src.transforms.wav_augs.Shifting
+            p: 1.0
+            sample_rate: 16000
+    inference:
+      get_spectrogram:
+        _target_: torchaudio.transforms.MelSpectrogram
+        sample_rate: 16000
+        n_fft: 512
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 0.0001
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.OneCycleLR
+  max_lr: 0.0002
+  pct_start: 0.1
+  steps_per_epoch: ${trainer.epoch_len}
+  epochs: ${trainer.n_epochs}
+  anneal_strategy: cos
+loss_function:
+  _target_: src.loss.CTCLossWrapper
+text_encoder:
+  _target_: src.text_encoder.CTCTextEncoder
+  use_lm: true
+  kenlm_model_path: 3-gram.arpa
+  vocab_path: librispeech-vocab.txt
+trainer:
+  log_step: 1
+  n_epochs: 3
+  epoch_len: 20
+  device_tensors:
+  - spectrogram
+  - text_encoded
+  resume_from: /Users/vera/Downloads/model_best.pth
+  device: auto
+  override: true
+  monitor: min val_WER_(Argmax)
+  save_period: 5
+  early_stop: ${trainer.n_epochs}
+  save_dir: saved_augs
+  seed: 60
+  max_grad_norm: 8

@@ -115,3 +115,4 @@ __MACOSX/
 librispeech-vocab.txt
 3-gram.arpa
 4-gram.arpa
+model_best.pth
