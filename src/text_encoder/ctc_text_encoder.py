@@ -28,9 +28,7 @@ class CTCTextEncoder:
         if kenlm_model_path is not None:
             with open(vocab_path) as f:
                 unigrams = [line.strip() for line in f.readlines()] 
-            if " " not in unigrams:
-                unigrams.append(" ")
-            self.decoder_lm = build_ctcdecoder(labels=[self.EMPTY_TOK] + self.alphabet, kenlm_model_path=kenlm_model_path, unigrams=unigrams)
+            self.decoder_lm = build_ctcdecoder(labels=[""] + self.alphabet, kenlm_model_path=kenlm_model_path, unigrams=unigrams)
         self.decoder_no_lm = BeamSearchDecoderCTC(Alphabet(self.vocab, False), None)
 
     def __len__(self):

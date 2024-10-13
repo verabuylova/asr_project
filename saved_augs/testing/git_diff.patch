@@ -1,61 +1,276 @@
+diff --git a/.gitignore b/.gitignore
+index fcba0cb..9c6af06 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -114,6 +114,6 @@ outputs/
+ __MACOSX/
+ librispeech-vocab.txt
+ 3-gram.arpa
+-4-gram.arpa
++3-gram.pruned.3e-7.arpa
+ model_best.pth
+ saved_augs
+\ No newline at end of file
+diff --git a/saved_augs/testing/config.yaml b/saved_augs/testing/config.yaml
+index e6de527..aa668ca 100644
+--- a/saved_augs/testing/config.yaml
++++ b/saved_augs/testing/config.yaml
+@@ -13,7 +13,7 @@ writer:
+   - loss
+   log_checkpoints: false
+   id_length: 8
+-  run_id: gi1mjnk8
++  run_id: 38kuo9ko
+ metrics:
+   train: []
+   inference:
+@@ -59,7 +59,7 @@ transforms:
+           time_mask_param: 20
+           p: 0.2
+         - _target_: src.transforms.spec_augs.FrequencyMasking
+-          freq_mask_param: 30
++          freq_mask_param: 20
+           p: 0.2
+   instance_transforms:
+     train:
+@@ -68,33 +68,30 @@ transforms:
+         sample_rate: 16000
+         n_fft: 512
+       audio:
+-        _target_: src.transforms.ChooseTransform
+-        p: 0.6
++        _target_: torchvision.transforms.v2.Compose
+         transforms:
+-          _target_: torchvision.transforms.v2.Compose
+-          transforms:
+-          - _target_: src.transforms.wav_augs.Gain
+-            p: 1.0
+-          - _target_: src.transforms.wav_augs.ColoredNoise
+-            p: 1.0
+-            min_snr_in_db: 10
+-            max_snr_in_db: 20
+-            sample_rate: 16000
+-          - _target_: src.transforms.wav_augs.BandPass
+-            p: 1.0
+-            sample_rate: 16000
+-            min_bandwidth_fraction: 1.1
+-            min_center_frequency: 1900
+-            max_center_frequency: 2100
+-          - _target_: src.transforms.wav_augs.BandStop
+-            p: 1.0
+-            sample_rate: 16000
+-            max_bandwidth_fraction: 1.2
+-            min_center_frequency: 1900
+-            max_center_frequency: 2100
+-          - _target_: src.transforms.wav_augs.Shifting
+-            p: 1.0
+-            sample_rate: 16000
++        - _target_: src.transforms.wav_augs.Gain
++          p: 0.1
++        - _target_: src.transforms.wav_augs.ColoredNoise
++          p: 0.1
++          min_snr_in_db: 10
++          max_snr_in_db: 20
++          sample_rate: 16000
++        - _target_: src.transforms.wav_augs.BandPass
++          p: 0.1
++          sample_rate: 16000
++          min_bandwidth_fraction: 1.1
++          min_center_frequency: 1900
++          max_center_frequency: 2100
++        - _target_: src.transforms.wav_augs.BandStop
++          p: 0.1
++          sample_rate: 16000
++          max_bandwidth_fraction: 1.2
++          min_center_frequency: 1900
++          max_center_frequency: 2100
++        - _target_: src.transforms.wav_augs.Shifting
++          p: 0.1
++          sample_rate: 16000
+     inference:
+       get_spectrogram:
+         _target_: torchaudio.transforms.MelSpectrogram
+@@ -119,12 +116,12 @@ text_encoder:
+   vocab_path: librispeech-vocab.txt
+ trainer:
+   log_step: 1
+-  n_epochs: 3
+-  epoch_len: 20
++  n_epochs: 10
++  epoch_len: 10
+   device_tensors:
+   - spectrogram
+   - text_encoded
+-  resume_from: /Users/vera/Downloads/model_best.pth
++  from_pretrained: null
+   device: auto
+   override: true
+   monitor: min val_WER_(Argmax)
+diff --git a/saved_augs/testing/git_commit.txt b/saved_augs/testing/git_commit.txt
+index a104b4b..d683548 100644
+--- a/saved_augs/testing/git_commit.txt
++++ b/saved_augs/testing/git_commit.txt
+@@ -1 +1 @@
+-98d972ddedb9d23af8e17c69823a25e3019648e8
++0cf20f0320c9a15793ad2dafc2377a879e4e80f9
+diff --git a/saved_augs/testing/git_diff.patch b/saved_augs/testing/git_diff.patch
+index a49be31..e69de29 100644
+--- a/saved_augs/testing/git_diff.patch
++++ b/saved_augs/testing/git_diff.patch
+@@ -1,121 +0,0 @@
+-diff --git a/src/configs/deepspeech2_onebatchtest.yaml b/src/configs/deepspeech2_onebatchtest.yaml
+-index 427f399..01ee02a 100644
+---- a/src/configs/deepspeech2_onebatchtest.yaml
+-+++ b/src/configs/deepspeech2_onebatchtest.yaml
+-@@ -1,10 +1,10 @@
+- defaults:
+-   - model: deepspeech2
+-   - writer: wandb
+--  - metrics: base
+-+  - metrics: metrics_augs
+-   - datasets: onebatchtest
+-   - dataloader: onebatchtest
+--  - transforms: base_only_instance
+-+  - transforms: base
+-   - _self_
+- optimizer:
+-   _target_: torch.optim.AdamW
+-@@ -25,14 +25,15 @@ text_encoder:
+-   vocab_path: "librispeech-vocab.txt"
+- trainer:
+-   log_step: 1
+--  n_epochs: 4
+--  epoch_len: 30
+-+  n_epochs: 3
+-+  epoch_len: 20
+-   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
+--  resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
+-+  resume_from: /Users/vera/Downloads/model_best.pth
+-   device: auto # device name or "auto"
+-   override: True # if True, will override the previous run with the same name
+-   monitor: "min val_WER_(Argmax)" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
+-   save_period: 5 # checkpoint each save_period epochs in addition to the best epoch
+-   early_stop: ${trainer.n_epochs} # epochs for early stopping
+--  save_dir: "saved"
+--  seed: 60
+-\ No newline at end of file
+-+  save_dir: "saved_augs"
+-+  seed: 60
+-+  max_grad_norm: 8
+-diff --git a/src/configs/transforms/instance_transforms/augmentations.yaml b/src/configs/transforms/instance_transforms/augmentations.yaml
+-index 55174c4..516d8ba 100644
+---- a/src/configs/transforms/instance_transforms/augmentations.yaml
+-+++ b/src/configs/transforms/instance_transforms/augmentations.yaml
+-@@ -11,13 +11,11 @@ train:
+-       transforms:
+-         - _target_: src.transforms.wav_augs.Gain
+-           p: 1.0
+--          gain_db_min: -2  
+--          gain_db_max: 2 
+-         - _target_: src.transforms.wav_augs.ColoredNoise
+-           p: 1.0
+-           min_snr_in_db: 10
+-           max_snr_in_db: 20
+--        sample_rate: 16000
+-+          sample_rate: 16000
+-         - _target_: src.transforms.wav_augs.BandPass
+-           p: 1.0
+-           sample_rate: 16000
+-diff --git a/src/datasets/librispeech_dataset.py b/src/datasets/librispeech_dataset.py
+-index 9a78acf..9e6e835 100644
+---- a/src/datasets/librispeech_dataset.py
+-+++ b/src/datasets/librispeech_dataset.py
+-@@ -8,7 +8,7 @@ import wget
+- from tqdm import tqdm
+- 
+- from src.datasets.base_dataset import BaseDataset
+--ROOT_PATH = Path("/kaggle/input/librispeech")
+-+from src.utils.io_utils import ROOT_PATH
+- 
+- URL_LINKS = {
+-     "dev-clean": "https://www.openslr.org/resources/12/dev-clean.tar.gz",
+-@@ -24,15 +24,11 @@ URL_LINKS = {
+- class LibrispeechDataset(BaseDataset):
+-     def __init__(self, part, data_dir=None, *args, **kwargs):
+-         assert part in URL_LINKS or part == "train_all"
+--        
+--        index_path = Path("/kaggle/working/hw_asr/data_index")
+--        
+--        index_path.mkdir(exist_ok=True, parents=True)
+--        
+-+
+-         if data_dir is None:
+--            data_dir = ROOT_PATH
+-+            data_dir = ROOT_PATH / "data" / "datasets" / "librispeech"
+-+            data_dir.mkdir(exist_ok=True, parents=True)
+-         self._data_dir = data_dir
+--        self._index_dir = index_path
+-         if part == "train_all":
+-             index = sum(
+-                 [
+-@@ -58,8 +54,7 @@ class LibrispeechDataset(BaseDataset):
+-         shutil.rmtree(str(self._data_dir / "LibriSpeech"))
+- 
+-     def _get_or_load_index(self, part):
+--        #index_path = self._data_dir / f"{part}_index.json"
+--        index_path = self._index_dir / f"{part}_index.json"
+-+        index_path = self._data_dir / f"{part}_index.json"
+-         if index_path.exists():
+-             with index_path.open() as f:
+-                 index = json.load(f)
+-diff --git a/src/transforms/__init__.py b/src/transforms/__init__.py
+-index c682309..0b25858 100644
+---- a/src/transforms/__init__.py
+-+++ b/src/transforms/__init__.py
+-@@ -1 +1 @@
+--from asr.src.transforms.choose_transform import ChooseTransform
+-\ No newline at end of file
+-+from src.transforms.choose_transform import ChooseTransform
+-\ No newline at end of file
+-diff --git a/src/transforms/spec_augs/__init__.py b/src/transforms/spec_augs/__init__.py
+-index 18bf660..c894129 100644
+---- a/src/transforms/spec_augs/__init__.py
+-+++ b/src/transforms/spec_augs/__init__.py
+-@@ -1,5 +1,5 @@
+--from asr.src.transforms.spec_augs.time_masking import TimeMasking
+--from asr.src.transforms.spec_augs.freq_masking import FrequencyMasking
+-+from src.transforms.spec_augs.time_masking import TimeMasking
+-+from src.transforms.spec_augs.freq_masking import FrequencyMasking
+- 
+- all = [
+-     "TimeMasking",
 diff --git a/src/configs/deepspeech2_onebatchtest.yaml b/src/configs/deepspeech2_onebatchtest.yaml
-index 427f399..01ee02a 100644
+index e095525..1b12207 100644
 --- a/src/configs/deepspeech2_onebatchtest.yaml
 +++ b/src/configs/deepspeech2_onebatchtest.yaml
-@@ -1,10 +1,10 @@
- defaults:
-   - model: deepspeech2
-   - writer: wandb
--  - metrics: base
-+  - metrics: metrics_augs
-   - datasets: onebatchtest
-   - dataloader: onebatchtest
--  - transforms: base_only_instance
-+  - transforms: base
-   - _self_
- optimizer:
-   _target_: torch.optim.AdamW
-@@ -25,14 +25,15 @@ text_encoder:
+@@ -25,10 +25,10 @@ text_encoder:
    vocab_path: "librispeech-vocab.txt"
  trainer:
    log_step: 1
--  n_epochs: 4
--  epoch_len: 30
-+  n_epochs: 3
-+  epoch_len: 20
+-  n_epochs: 3
+-  epoch_len: 20
++  n_epochs: 10
++  epoch_len: 10
    device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
--  resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
-+  resume_from: /Users/vera/Downloads/model_best.pth
+-  from_pretrained: model_best.pth
++  from_pretrained: null
    device: auto # device name or "auto"
    override: True # if True, will override the previous run with the same name
    monitor: "min val_WER_(Argmax)" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
-   save_period: 5 # checkpoint each save_period epochs in addition to the best epoch
-   early_stop: ${trainer.n_epochs} # epochs for early stopping
--  save_dir: "saved"
--  seed: 60
+diff --git a/src/configs/metrics/metrics_augs.yaml b/src/configs/metrics/metrics_augs.yaml
+index fc89298..280ea2d 100644
+--- a/src/configs/metrics/metrics_augs.yaml
++++ b/src/configs/metrics/metrics_augs.yaml
+@@ -10,5 +10,5 @@ inference: # metrics that are calculated during inference (eval)
+     name: "WER_(BS)"
+   - _target_: src.metrics.BeamSearchLMCERMetric
+     name: "CER_(BS_LM)" 
+-  - _target_: src.metrics.BeamSearchLMCERMetric
+-    name: "WER_(BS_LM"
 \ No newline at end of file
-+  save_dir: "saved_augs"
-+  seed: 60
-+  max_grad_norm: 8
-diff --git a/src/configs/transforms/instance_transforms/augmentations.yaml b/src/configs/transforms/instance_transforms/augmentations.yaml
-index 55174c4..516d8ba 100644
---- a/src/configs/transforms/instance_transforms/augmentations.yaml
-+++ b/src/configs/transforms/instance_transforms/augmentations.yaml
-@@ -11,13 +11,11 @@ train:
-       transforms:
-         - _target_: src.transforms.wav_augs.Gain
-           p: 1.0
--          gain_db_min: -2  
--          gain_db_max: 2 
-         - _target_: src.transforms.wav_augs.ColoredNoise
-           p: 1.0
-           min_snr_in_db: 10
-           max_snr_in_db: 20
--        sample_rate: 16000
-+          sample_rate: 16000
-         - _target_: src.transforms.wav_augs.BandPass
-           p: 1.0
-           sample_rate: 16000
++  - _target_: src.metrics.BeamSearchLMWERMetric
++    name: "WER_(BS_LM)"
+\ No newline at end of file
 diff --git a/src/datasets/librispeech_dataset.py b/src/datasets/librispeech_dataset.py
 index 9a78acf..9e6e835 100644
 --- a/src/datasets/librispeech_dataset.py
@@ -98,24 +313,126 @@ index 9a78acf..9e6e835 100644
          if index_path.exists():
              with index_path.open() as f:
                  index = json.load(f)
-diff --git a/src/transforms/__init__.py b/src/transforms/__init__.py
-index c682309..0b25858 100644
---- a/src/transforms/__init__.py
-+++ b/src/transforms/__init__.py
-@@ -1 +1 @@
--from asr.src.transforms.choose_transform import ChooseTransform
-\ No newline at end of file
-+from src.transforms.choose_transform import ChooseTransform
-\ No newline at end of file
-diff --git a/src/transforms/spec_augs/__init__.py b/src/transforms/spec_augs/__init__.py
-index 18bf660..c894129 100644
---- a/src/transforms/spec_augs/__init__.py
-+++ b/src/transforms/spec_augs/__init__.py
-@@ -1,5 +1,5 @@
--from asr.src.transforms.spec_augs.time_masking import TimeMasking
--from asr.src.transforms.spec_augs.freq_masking import FrequencyMasking
-+from src.transforms.spec_augs.time_masking import TimeMasking
-+from src.transforms.spec_augs.freq_masking import FrequencyMasking
+diff --git a/src/metrics/cer.py b/src/metrics/cer.py
+index 907b39c..4a10e52 100644
+--- a/src/metrics/cer.py
++++ b/src/metrics/cer.py
+@@ -37,13 +37,13 @@ class BeamSearchCERMetric(BaseMetric):
+         self.type = type
+         self.beam_size = beam_size
  
- all = [
-     "TimeMasking",
+-    def __call__(self, log_probs: Tensor, probs: Tensor, log_probs_length: Tensor, text: List[str], **kwargs):
++    def __call__(self, log_probs: Tensor, probs: Tensor, logits: Tensor, log_probs_length: Tensor, text: List[str], **kwargs):
+         cers = []
+         probs_ = probs.detach().cpu().numpy()
+         lengths = log_probs_length.detach().numpy()
+         for prob, length, target_text in zip(probs_, lengths, text):
+             target_text = self.text_encoder.normalize_text(target_text)
+-            pred_text = self.text_encoder.ctc_beam_search(False, log_probs, prob[:length], 10)
++            pred_text = self.text_encoder.ctc_beam_search(False, log_probs, prob[:length], logits, 10)
+             cers.append(calc_cer(target_text, pred_text))
+         return sum(cers) / len(cers)
+ 
+@@ -58,11 +58,11 @@ class BeamSearchLMCERMetric(BaseMetric):
+ 
+     def __call__(self, log_probs: Tensor, probs: Tensor, logits: Tensor, log_probs_length: Tensor, text: List[str], **kwargs):
+         cers = []
+-        probs_ = logits.detach().cpu().numpy()
++        logits_ = logits.detach().cpu().numpy()
+         lengths = log_probs_length.detach().numpy()
+-        for prob, length, target_text in zip(probs_, lengths, text):
++        for logit, length, target_text in zip(logits_, lengths, text):
+             target_text = self.text_encoder.normalize_text(target_text)
+-            pred_text = self.text_encoder.ctc_beam_search(True, logits, prob[:length], 10)
++            pred_text = self.text_encoder.ctc_beam_search(True, log_probs, probs, logit[:length], 10)
+             cers.append(calc_cer(target_text, pred_text))
+         return sum(cers) / len(cers)
+     
+diff --git a/src/metrics/wer.py b/src/metrics/wer.py
+index d5acbbf..1a3c61d 100644
+--- a/src/metrics/wer.py
++++ b/src/metrics/wer.py
+@@ -37,13 +37,13 @@ class BeamSearchWERMetric(BaseMetric):
+         self.type = type
+         self.beam_size = beam_size
+ 
+-    def __call__(self, log_probs: Tensor, probs: Tensor, log_probs_length: Tensor, text: List[str], **kwargs):
++    def __call__(self, log_probs: Tensor, probs: Tensor, logits: Tensor, log_probs_length: Tensor, text: List[str], **kwargs):
+         wers = []
+         probs_ = probs.detach().cpu().numpy()
+         lengths = log_probs_length.detach().numpy()
+         for prob, length, target_text in zip(probs_, lengths, text):
+             target_text = self.text_encoder.normalize_text(target_text)
+-            pred_text = self.text_encoder.ctc_beam_search(False, log_probs, prob[:length], 10)
++            pred_text = self.text_encoder.ctc_beam_search(False, log_probs, prob[:length], logits, 10)
+             wers.append(calc_wer(target_text, pred_text))
+         return sum(wers) / len(wers)
+ 
+@@ -58,11 +58,11 @@ class BeamSearchLMWERMetric(BaseMetric):
+ 
+     def __call__(self, log_probs: Tensor, probs: Tensor, logits: Tensor, log_probs_length: Tensor, text: List[str], **kwargs):
+         wers = []
+-        probs_ = logits.detach().cpu().numpy()
++        logits_ = logits.detach().cpu().numpy()
+         lengths = log_probs_length.detach().numpy()
+-        for prob, length, target_text in zip(probs_, lengths, text):
++        for logit, length, target_text in zip(logits_, lengths, text):
+             target_text = self.text_encoder.normalize_text(target_text)
+-            pred_text = self.text_encoder.ctc_beam_search(True, logits, prob[:length], 10)
++            pred_text = self.text_encoder.ctc_beam_search(True, log_probs, probs, logit[:length], 10)
+             wers.append(calc_wer(target_text, pred_text))
+         return sum(wers) / len(wers)
+     
+\ No newline at end of file
+diff --git a/src/text_encoder/ctc_text_encoder.py b/src/text_encoder/ctc_text_encoder.py
+index 742c9d3..ef462dd 100644
+--- a/src/text_encoder/ctc_text_encoder.py
++++ b/src/text_encoder/ctc_text_encoder.py
+@@ -28,9 +28,7 @@ class CTCTextEncoder:
+         if kenlm_model_path is not None:
+             with open(vocab_path) as f:
+                 unigrams = [line.strip() for line in f.readlines()] 
+-            if " " not in unigrams:
+-                unigrams.append(" ")
+-            self.decoder_lm = build_ctcdecoder(labels=[self.EMPTY_TOK] + self.alphabet, kenlm_model_path=kenlm_model_path, unigrams=unigrams)
++            self.decoder_lm = build_ctcdecoder(labels=[""] + self.alphabet, kenlm_model_path=kenlm_model_path, unigrams=unigrams)
+         self.decoder_no_lm = BeamSearchDecoderCTC(Alphabet(self.vocab, False), None)
+ 
+     def __len__(self):
+diff --git a/src/trainer/inferencer.py b/src/trainer/inferencer.py
+index a41ed84..6f5156f 100644
+--- a/src/trainer/inferencer.py
++++ b/src/trainer/inferencer.py
+@@ -140,11 +140,12 @@ class Inferencer(BaseTrainer):
+         for i in range(batch_size):
+             # clone because of
+             # https://github.com/pytorch/pytorch/issues/1995
++            log_probs = batch["log_probs"][i].clone()
+             logits = batch["logits"][i].clone()
+             probs = batch["probs"][i].clone()
+             length = batch["log_probs_length"][i].clone()
+             label = batch["text"][i]
+-            pred_label = self.text_encoder.ctc_beam_search(True, logits[:length], probs[:length], 10) 
++            pred_label = self.text_encoder.ctc_beam_search(True, log_probs, probs, logits[:length], 10) 
+ 
+             output_id = current_id + i
+ 
+diff --git a/src/trainer/trainer.py b/src/trainer/trainer.py
+index 3e3ffd8..f0f5d75 100644
+--- a/src/trainer/trainer.py
++++ b/src/trainer/trainer.py
+@@ -115,11 +115,11 @@ class Trainer(BaseTrainer):
+         argmax_texts_raw = [self.text_encoder.decode(inds) for inds in argmax_inds]
+         argmax_texts = [self.text_encoder.ctc_decode(inds) for inds in argmax_inds]
+ 
+-        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], 10) 
++        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], logits, 10) 
+                     for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
+         
+-        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, logits, probs_element[:log_probs_length_element], 10) 
+-                    for (probs_element, log_probs_length_element) in zip(logits, log_probs_length)]
++        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs, probs, logits_element[:log_probs_length_element], 10) 
++                    for (logits_element, log_probs_length_element) in zip(logits, log_probs_length)]
+         
+ 
+         tuples = list(zip(argmax_texts, preds_bs, preds_bs_lm, text, argmax_texts_raw, audio_path))

@@ -114,6 +114,6 @@ outputs/
 __MACOSX/
 librispeech-vocab.txt
 3-gram.arpa
-4-gram.arpa
+3-gram.pruned.3e-7.arpa
 model_best.pth
 saved_augs

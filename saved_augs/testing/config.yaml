@@ -13,7 +13,7 @@ writer:
   - loss
   log_checkpoints: false
   id_length: 8
-  run_id: gi1mjnk8
+  run_id: 38kuo9ko
 metrics:
   train: []
   inference:
@@ -59,7 +59,7 @@ transforms:
           time_mask_param: 20
           p: 0.2
         - _target_: src.transforms.spec_augs.FrequencyMasking
-          freq_mask_param: 30
+          freq_mask_param: 20
           p: 0.2
   instance_transforms:
     train:
@@ -68,33 +68,30 @@ transforms:
         sample_rate: 16000
         n_fft: 512
       audio:
-        _target_: src.transforms.ChooseTransform
-        p: 0.6
+        _target_: torchvision.transforms.v2.Compose
         transforms:
-          _target_: torchvision.transforms.v2.Compose
-          transforms:
-          - _target_: src.transforms.wav_augs.Gain
-            p: 1.0
-          - _target_: src.transforms.wav_augs.ColoredNoise
-            p: 1.0
-            min_snr_in_db: 10
-            max_snr_in_db: 20
-            sample_rate: 16000
-          - _target_: src.transforms.wav_augs.BandPass
-            p: 1.0
-            sample_rate: 16000
-            min_bandwidth_fraction: 1.1
-            min_center_frequency: 1900
-            max_center_frequency: 2100
-          - _target_: src.transforms.wav_augs.BandStop
-            p: 1.0
-            sample_rate: 16000
-            max_bandwidth_fraction: 1.2
-            min_center_frequency: 1900
-            max_center_frequency: 2100
-          - _target_: src.transforms.wav_augs.Shifting
-            p: 1.0
-            sample_rate: 16000
+        - _target_: src.transforms.wav_augs.Gain
+          p: 0.1
+        - _target_: src.transforms.wav_augs.ColoredNoise
+          p: 0.1
+          min_snr_in_db: 10
+          max_snr_in_db: 20
+          sample_rate: 16000
+        - _target_: src.transforms.wav_augs.BandPass
+          p: 0.1
+          sample_rate: 16000
+          min_bandwidth_fraction: 1.1
+          min_center_frequency: 1900
+          max_center_frequency: 2100
+        - _target_: src.transforms.wav_augs.BandStop
+          p: 0.1
+          sample_rate: 16000
+          max_bandwidth_fraction: 1.2
+          min_center_frequency: 1900
+          max_center_frequency: 2100
+        - _target_: src.transforms.wav_augs.Shifting
+          p: 0.1
+          sample_rate: 16000
     inference:
       get_spectrogram:
         _target_: torchaudio.transforms.MelSpectrogram
@@ -119,12 +116,12 @@ text_encoder:
   vocab_path: librispeech-vocab.txt
 trainer:
   log_step: 1
-  n_epochs: 3
-  epoch_len: 20
+  n_epochs: 10
+  epoch_len: 10
   device_tensors:
   - spectrogram
   - text_encoded
-  resume_from: /Users/vera/Downloads/model_best.pth
+  from_pretrained: null
   device: auto
   override: true
   monitor: min val_WER_(Argmax)

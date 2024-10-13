@@ -115,11 +115,11 @@ class Trainer(BaseTrainer):
         argmax_texts_raw = [self.text_encoder.decode(inds) for inds in argmax_inds]
         argmax_texts = [self.text_encoder.ctc_decode(inds) for inds in argmax_inds]
 
-        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], 10) 
+        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], logits, 10) 
                     for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
         
-        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, logits, probs_element[:log_probs_length_element], 10) 
-                    for (probs_element, log_probs_length_element) in zip(logits, log_probs_length)]
+        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs, probs, logits_element[:log_probs_length_element], 10) 
+                    for (logits_element, log_probs_length_element) in zip(logits, log_probs_length)]
         
 
         tuples = list(zip(argmax_texts, preds_bs, preds_bs_lm, text, argmax_texts_raw, audio_path))
