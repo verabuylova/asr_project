@@ -4,7 +4,7 @@ defaults:
   - metrics: base
   - datasets: onebatchtest
   - dataloader: onebatchtest
-  - transforms: baseonly_instance
+  - transforms: base_only_instance
   - _self_
 optimizer:
   _target_: torch.optim.AdamW
