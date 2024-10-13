@@ -1,42 +1,62 @@
-import logging
-from typing import List
-
 import torch
+from torch.nn.utils.rnn import pad_sequence
 
-logger = logging.getLogger(__name__)
 
-def collate_fn(dataset_items: List[dict]):
+def collate_fn(dataset_items: list[dict]):
     """
-    Collate and pad fields in dataset items
+    Collate and pad fields in the dataset items.
+    Converts individual items into a batch.
+
+    Args:
+        dataset_items (list[dict]): list of objects from
+            dataset.__getitem__.
+    Returns:
+        result_batch (dict[Tensor]): dict, containing batch-version
+            of the tensors.
     """
-    audio = [item['audio'] for item in dataset_items]
+    text_encoded_lengths = []
+    spectrogram_lengths = []
+    spectrograms = []
+    text_encodeds = []
+    texts = []
+    audios = []
+    audio_paths = []
 
-    spectrograms = [item['spectrogram'].squeeze(0) for item in dataset_items]
-    spectrograms = [spec.T for spec in spectrograms]
-    spectrograms = torch.nn.utils.rnn.pad_sequence(spectrograms)
-    spectrograms = spectrograms.permute(1, 2, 0) 
-    spectrograms = torch.log(spectrograms + 1e-10)
-    
-    texts = [item['text'] for item in dataset_items]
+    for item in dataset_items:
+        text_encoded_lengths.append(item["text_encoded"].shape[1])
+        spectrogram_lengths.append(item["spectrogram"].shape[2])
 
-    texts_encoded = [item['text_encoded'] for item in dataset_items]
-    texts_encoded = [tex.T for tex in texts_encoded]
-    texts_encoded = torch.nn.utils.rnn.pad_sequence(texts_encoded)
-    texts_encoded = texts_encoded.permute(1, 2, 0).squeeze(1)
+        spectrogram = item["spectrogram"].squeeze(0).transpose(0, -1)
+        # spectrogram = torch.log(spectrogram + 1e-7)
+        spectrograms.append(spectrogram)
 
-    texts_encoded_lens = torch.tensor([text_encoded.shape[-1] for text_encoded in texts_encoded])
+        text_encoded = item["text_encoded"].squeeze(0).transpose(0, -1)
+        text_encodeds.append(text_encoded)
+        texts.append(item["text"])
 
-    spectrogram_lens = torch.tensor([spec.shape[1] for spec in spectrograms])
+        audio = item["audio"].squeeze(0)
+        audios.append(audio)
+        audio_paths.append(item["audio_path"])
 
-    audio_paths = [item['audio_path'] for item in dataset_items] 
-    
+    text_encoded_lengths = torch.tensor(text_encoded_lengths, dtype=torch.long)
+    spectrogram_lengths = torch.tensor(spectrogram_lengths, dtype=torch.long)
 
-    return {
-        'spectrogram': spectrograms,
-        'spectrogram_length': spectrogram_lens,
-        'text_encoded': texts_encoded,
-        'text_encoded_length': texts_encoded_lens,
-        'text': texts,
-        'audio_path': audio_paths,
-        'audio': audio
+    spectrograms = pad_sequence(
+        spectrograms, batch_first=True, padding_value=0.0
+    ).transpose(1, -1)
+    text_encodeds = pad_sequence(
+        text_encodeds, batch_first=True, padding_value=0
+    ).transpose(1, -1)
+    audios = pad_sequence(audios, batch_first=True, padding_value=0.0).transpose(1, -1)
+
+    result_batch = {
+        "text_encoded_length": text_encoded_lengths,
+        "spectrogram_length": spectrogram_lengths,
+        "spectrogram": spectrograms,
+        "text_encoded": text_encodeds,
+        "text": texts,
+        "audio": audios,
+        "audio_path": audio_paths,
     }
+
+    return result_batch
