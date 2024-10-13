@@ -1,10 +1,10 @@
 defaults:
   - model: deepspeech2
   - writer: wandb
-  - metrics: example
-  - datasets: example
-  - dataloader: example
-  - transforms: example_only_instance
+  - metrics: base
+  - datasets: base
+  - dataloader: base
+  - transforms: base_only_instance
   - _self_
 optimizer:
   _target_: torch.optim.AdamW

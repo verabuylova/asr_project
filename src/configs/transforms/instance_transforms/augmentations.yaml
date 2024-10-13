@@ -4,33 +4,35 @@ train:
     sample_rate: 16000
     n_fft: 512
   audio: # name of the tensor on which we apply transform
-    _target_: src.transforms.RandomApply
-    p: 0.8
+    _target_: src.transforms.ChooseTransform
+    p: 0.6
     transforms:
       _target_: torchvision.transforms.v2.Compose
       transforms:
         - _target_: src.transforms.wav_augs.Gain
-          p: 0.6
+          p: 1.0
+          gain_db_min: -2  
+          gain_db_max: 2 
         - _target_: src.transforms.wav_augs.ColoredNoise
-          p: 0.7
+          p: 1.0
+          min_snr_in_db: 10
+          max_snr_in_db: 20
+        sample_rate: 16000
+        - _target_: src.transforms.wav_augs.BandPass
+          p: 1.0
           sample_rate: 16000
-        - _target_: torchvision.transforms.v2.RandomChoice
-          transforms:
-            - _target_: src.transforms.wav_augs.BandPass
-              p: 1.0
-              min_bandwidth_fraction: 1.5
-              sample_rate: 16000
-              min_center_frequency: 1950
-              max_center_frequency: 2050
-            - _target_: src.transforms.wav_augs.BandStop
-              p: 1.0
-              max_bandwidth_fraction: 1.5
-              sample_rate: 16000
-              min_center_frequency: 1950
-              max_center_frequency: 2050
-            - _target_: src.transforms.wav_augs.Shifting
-              p: 1.0
-              sample_rate: 16000
+          min_bandwidth_fraction: 1.1 
+          min_center_frequency: 1900
+          max_center_frequency: 2100
+        - _target_: src.transforms.wav_augs.BandStop
+          p: 1.0
+          sample_rate: 16000
+          max_bandwidth_fraction: 1.2
+          min_center_frequency: 1900
+          max_center_frequency: 2100
+        - _target_: src.transforms.wav_augs.Shifting
+          p: 1.0
+          sample_rate: 16000
 inference:
   get_spectrogram:
     _target_: torchaudio.transforms.MelSpectrogram
