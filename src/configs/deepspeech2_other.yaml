@@ -25,10 +25,10 @@ text_encoder:
   vocab_path: "/kaggle/input/vocabulary/librispeech-vocab.txt"
 trainer:
   log_step: 50
-  n_epochs: 10
+  n_epochs: 7
   epoch_len: 200
   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
-  from_pretrained: /kaggle/input/model_best_2/model_best_2.pth
+  from_pretrained: /kaggle/input/model_best_2/model_best.pth
   device: auto # device name or "auto"
   override: True # if True, will override the previous run with the same name
   monitor: "min val_WER_(Argmax)" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
