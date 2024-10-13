@@ -115,5 +115,6 @@ __MACOSX/
 librispeech-vocab.txt
 3-gram.arpa
 3-gram.pruned.3e-7.arpa
-model_best.pth
+model_best_1.pth
+model_best_2.pth
 saved_augs

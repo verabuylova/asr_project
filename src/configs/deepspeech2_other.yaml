@@ -1,10 +1,10 @@
 defaults:
   - model: deepspeech2
   - writer: wandb
-  - metrics: metrics_augs
-  - datasets: datasets_augs
+  - metrics: base
+  - datasets: datasets_other
   - dataloader: base
-  - transforms: base
+  - transforms: base_only_instance
   - _self_
 optimizer:
   _target_: torch.optim.AdamW
@@ -21,14 +21,14 @@ loss_function:
 text_encoder:
   _target_: src.text_encoder.CTCTextEncoder
   use_lm: True
-  kenlm_model_path: "/kaggle/input/3-gram/3-gram.pruned.3e-7.arpa"
-  vocab_path: "/kaggle/input/libri-vocab/librispeech-vocab.txt"
+  kenlm_model_path: "/kaggle/input/3-gram-model/3-gram.arpa"
+  vocab_path: "/kaggle/input/vocabulary/librispeech-vocab.txt"
 trainer:
   log_step: 50
-  n_epochs: 20
+  n_epochs: 10
   epoch_len: 200
   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
-  from_pretrained: model_best_1.pth
+  from_pretrained: /kaggle/input/model_best_2/model_best_2.pth
   device: auto # device name or "auto"
   override: True # if True, will override the previous run with the same name
   monitor: "min val_WER_(Argmax)" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
