@@ -25,7 +25,7 @@ text_encoder:
   vocab_path: "/kaggle/input/libri-vocab/librispeech-vocab.txt"
 trainer:
   log_step: 50
-  n_epochs: 30
+  n_epochs: 20
   epoch_len: 200
   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
   from_pretrained: /kaggle/input/model-best/model_best.pth
