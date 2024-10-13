@@ -63,7 +63,12 @@ class Trainer(BaseTrainer):
             metrics.update(loss_name, batch[loss_name].item())
 
         for met in metric_funcs:
-            metrics.update(met.name, met(**batch))
+            if met.name in ["CER_(BS)", "WER_(BS)", "CER_(BS_LM)", "WER_(BS_LM)"]:
+                if self.current_epoch % 10 == 0: 
+                    metrics.update(met.name, met(**batch))
+            else:
+                metrics.update(met.name, met(**batch))
+
         return batch
 
     def _log_batch(self, batch_idx, batch, mode="train"):
@@ -95,48 +100,55 @@ class Trainer(BaseTrainer):
         self.writer.add_image("spectrogram", image)
 
     def log_predictions(
-        self, text, log_probs: torch.tensor, log_probs_length: torch.tensor, audio_path, audio: torch.tensor, examples_to_log=5, **batch
+        self, text, log_probs, probs, log_probs_length, audio_path, examples_to_log=10, **batch
     ):
         # TODO add beam search
         # Note: by improving text encoder and metrics design
         # this logging can also be improved significantly
 
-        # сперва будем выбирать случайные examples_to_log объектов, а потом всё считать
-        indices = random.sample(range(len(text)), min(examples_to_log, len(text)))
 
-        texts = [text[i] for i in indices]
-        log_probas = log_probs[indices].detach().cpu().numpy()
-        log_probs_lengths = log_probs_length[indices].detach().cpu().numpy()
-        audio_paths = [audio_path[i] for i in indices]
-        audios = audio[indices].squeeze().numpy()
-
-        argmax_inds = log_probas.argmax(-1)
+        argmax_inds = log_probs.cpu().argmax(-1).numpy()
         argmax_inds = [
             inds[: int(ind_len)]
-            for inds, ind_len in zip(argmax_inds, log_probs_lengths)
+            for inds, ind_len in zip(argmax_inds, log_probs_length.numpy())
         ]
         argmax_texts_raw = [self.text_encoder.decode(inds) for inds in argmax_inds]
         argmax_texts = [self.text_encoder.ctc_decode(inds) for inds in argmax_inds]
 
-        tuples = list(zip(argmax_texts, texts, argmax_texts_raw, audio_paths, audios))
+        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], 4) 
+                    for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
+        
+        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs, probs_element[:log_probs_length_element], 50) 
+                    for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
+        
+
+        tuples = list(zip(argmax_texts, preds_bs, preds_bs_lm, text, argmax_texts_raw, audio_path))
 
         rows = {}
-        for pred_argmax, target, raw_pred, audio_path, audio_aug in tuples:
+        for pred, pred_bs, pred_bs_lm, target, raw_pred, audio_path in tuples[:examples_to_log]:
             target = self.text_encoder.normalize_text(target)
-            wer = calc_wer(target, pred_argmax) * 100
-            cer = calc_cer(target, pred_argmax) * 100
+            wer = calc_wer(target, pred) * 100
+            cer = calc_cer(target, pred) * 100
 
+            wer_bs = calc_wer(target, pred_bs) * 100
+            cer_bs = calc_cer(target, pred_bs) * 100
+
+            wer_bs_lm = calc_wer(target, pred_bs_lm) * 100
+            cer_bs_lm = calc_cer(target, pred_bs_lm) * 100
 
             rows[Path(audio_path).name] = {
-                "audio": self.writer.wandb.Audio(audio_aug, sample_rate=16000),
                 "target": target,
                 "raw prediction": raw_pred,
-                "predictions": pred_argmax,
-                "wer_argmax": wer,
-                "cer_argmax": cer,
+                "predictions": pred,
+                "predictions bs": pred_bs,
+                "predictions bs+lm": pred_bs_lm,
+                "wer": wer,
+                "cer": cer,
+                "wer_bs": wer_bs,
+                "cer_bs": cer_bs,
+                "wer_bs_lm": wer_bs_lm,
+                "cer_bs_lm":cer_bs_lm
             }
-
-        # Логирование таблицы
         self.writer.add_table(
             "predictions", pd.DataFrame.from_dict(rows, orient="index")
         )
