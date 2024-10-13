@@ -28,7 +28,7 @@ trainer:
   n_epochs: 3
   epoch_len: 20
   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
-  from_pretrained: null
+  from_pretrained: model_best.pth
   device: auto # device name or "auto"
   override: True # if True, will override the previous run with the same name
   monitor: "min val_WER_(Argmax)" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
