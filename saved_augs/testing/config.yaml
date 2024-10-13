@@ -27,8 +27,8 @@ metrics:
     name: WER_(BS)
   - _target_: src.metrics.BeamSearchLMCERMetric
     name: CER_(BS_LM)
-  - _target_: src.metrics.BeamSearchLMCERMetric
-    name: WER_(BS_LM
+  - _target_: src.metrics.BeamSearchLMWERMetric
+    name: WER_(BS_LM)
 datasets:
   train:
     _target_: src.datasets.LibrispeechDataset

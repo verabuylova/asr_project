@@ -64,7 +64,7 @@ class Trainer(BaseTrainer):
 
         for met in metric_funcs:
             if met.name in ["CER_(BS)", "WER_(BS)", "CER_(BS_LM)", "WER_(BS_LM)"]:
-                if self.current_epoch % 6 == 0: 
+                if self.current_epoch % 5 == 0: 
                     metrics.update(met.name, met(**batch))
             else:
                 metrics.update(met.name, met(**batch))
@@ -115,10 +115,10 @@ class Trainer(BaseTrainer):
         argmax_texts_raw = [self.text_encoder.decode(inds) for inds in argmax_inds]
         argmax_texts = [self.text_encoder.ctc_decode(inds) for inds in argmax_inds]
 
-        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], 4) 
+        preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], 10) 
                     for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
         
-        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs, probs_element[:log_probs_length_element], 50) 
+        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs, probs_element[:log_probs_length_element], 10) 
                     for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
         
 
@@ -147,7 +147,7 @@ class Trainer(BaseTrainer):
                 "wer_bs": wer_bs,
                 "cer_bs": cer_bs,
                 "wer_bs_lm": wer_bs_lm,
-                "cer_bs_lm":cer_bs_lm
+                "cer_bs_lm": cer_bs_lm
             }
         self.writer.add_table(
             "predictions", pd.DataFrame.from_dict(rows, orient="index")

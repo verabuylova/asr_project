@@ -27,7 +27,9 @@ class CTCTextEncoder:
         self.char2ind = {v: k for k, v in self.ind2char.items()}
         if kenlm_model_path is not None:
             with open(vocab_path) as f:
-                unigrams = [line.strip() for line in f.readlines()]
+                unigrams = [line.strip() for line in f.readlines()] 
+            if " " not in unigrams:
+                unigrams.append(" ")
             self.decoder_lm = build_ctcdecoder(labels=[self.EMPTY_TOK] + self.alphabet, kenlm_model_path=kenlm_model_path, unigrams=unigrams)
         self.decoder_no_lm = BeamSearchDecoderCTC(Alphabet(self.vocab, False), None)
 
@@ -78,7 +80,7 @@ class CTCTextEncoder:
         if use_lm:
             if isinstance(probs, torch.Tensor):
                 probs = probs.detach().cpu().numpy()
-            return self.decoder_lm.decode(probs, 50).lower()
+            return self.decoder_lm.decode(probs, 10).lower()
         else:
             if isinstance(probs, torch.Tensor):
                 probs = probs.detach().cpu().numpy()
