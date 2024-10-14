@@ -9,7 +9,7 @@ defaults:
 text_encoder:
   _target_: src.text_encoder.CTCTextEncoder
   use_lm: True
-  kenlm_model_path: "/kaggle/input/3-gram-model/3-gram.arpa"
+  kenlm_model_path: "/kaggle/input/3-gram-model/lower-3-gram.arpa"
   vocab_path: "/kaggle/input/vocabulary/librispeech-vocab.txt"
 
 inferencer:
