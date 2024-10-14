@@ -1,6 +1,6 @@
 defaults:
   - model: deepspeech2
-  - metrics: base
+  - metrics: metrics_augs
   - datasets: inference_clean # we do not want to run inference on training data
   - dataloader: base
   - transforms: base_only_instance
