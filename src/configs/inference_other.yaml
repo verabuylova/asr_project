@@ -9,7 +9,7 @@ defaults:
 text_encoder:
   _target_: src.text_encoder.CTCTextEncoder
   use_lm: True
-  kenlm_model_path: "/kaggle/working/4-gram-lower.arpa"
+  kenlm_model_path: "/kaggle/working/lower-4-gram.arpa"
   vocab_path: "/kaggle/input/vocabulary/librispeech-vocab.txt"
 
 inferencer:
@@ -17,4 +17,4 @@ inferencer:
   device: auto # device name or "auto"
   save_path: "result" # any name here, can be a dataset name
   seed: 42
-  from_pretrained: "/kaggle/input/model-best-3-other/model_best_3_other.pth" # path to the pretrained model
+  from_pretrained: "/kaggle/input/model-best-4-other/model_best_4_other.pth" # path to the pretrained model
