@@ -49,7 +49,7 @@ class BeamSearchWERMetric(BaseMetric):
 
 class BeamSearchLMWERMetric(BaseMetric):
     def __init__(
-        self, text_encoder, type: str = "BS", beam_size=10, *args, **kwargs
+        self, text_encoder, beam_size=100, *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.text_encoder = text_encoder
@@ -62,7 +62,7 @@ class BeamSearchLMWERMetric(BaseMetric):
         lengths = log_probs_length.detach().numpy()
         for logit, length, target_text in zip(logits_, lengths, text):
             target_text = self.text_encoder.normalize_text(target_text)
-            pred_text = self.text_encoder.ctc_beam_search(True, log_probs, probs, logit[:length], 10)
+            pred_text = self.text_encoder.ctc_beam_search(True, log_probs, probs, logit[:length], 100)
             wers.append(calc_wer(target_text, pred_text))
         return sum(wers) / len(wers)
     

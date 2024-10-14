@@ -118,7 +118,7 @@ class Trainer(BaseTrainer):
         preds_bs = [self.text_encoder.ctc_beam_search(False, log_probs, probs_element[:log_probs_length_element], logits, 10) 
                     for (probs_element, log_probs_length_element) in zip(probs, log_probs_length)]
         
-        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs, probs, logits_element[:log_probs_length_element], 10) 
+        preds_bs_lm = [self.text_encoder.ctc_beam_search(True, log_probs, probs, logits_element[:log_probs_length_element], 100) 
                     for (logits_element, log_probs_length_element) in zip(logits, log_probs_length)]
         
 

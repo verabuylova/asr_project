@@ -118,5 +118,6 @@ librispeech-vocab.txt
 model_best_1.pth
 model_best_2.pth
 model_best_3_other.pth
+model_best_4_other.pth
 saved_augs
 lower-3-gram.arpa

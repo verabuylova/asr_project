@@ -25,8 +25,8 @@ text_encoder:
   vocab_path: "librispeech-vocab.txt"
 trainer:
   log_step: 1
-  n_epochs: 10
-  epoch_len: 10
+  n_epochs: 3
+  epoch_len: 40
   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
   from_pretrained: null
   device: auto # device name or "auto"

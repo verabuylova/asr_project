@@ -56,18 +56,43 @@ Follow these steps to install the project:
 
 ## How To Use
 
-To train a model, run the following command:
+To train a model, download the files from [here](https://disk.yandex.ru/client/disk/asr). and locate them to the working repository. Then, run the following commands:
+
+1. Train 30 epochs on train-clean-100.
 
 ```bash
-python3 train.py -cn=CONFIG_NAME HYDRA_CONFIG_ARGUMENTS
+python3 train.py -cn=deepspeech2
 ```
 
-Where `CONFIG_NAME` is a config from `src/configs` and `HYDRA_CONFIG_ARGUMENTS` are optional arguments.
-
-To run inference (evaluate the model or save predictions):
+2. Train 20 epochs with augmentations on train-clean-360.
 
 ```bash
-python3 inference.py HYDRA_CONFIG_ARGUMENTS
+python3 train.py -cn=deepspeech2_augs
+```
+
+3. Train 20 epochs on train-other-500.
+
+```bash
+python3 train.py -cn=deepspeech2_other
+```
+
+3. Train 20 more epochs on train-other-500.
+
+```bash
+python3 train.py -cn=deepspeech2_other_round2
+```
+
+To run inference (evaluate the model or save predictions), download the files from here and locate them to the working repository. Then, run the following commands:
+
+1. To run inference on clean set:
+
+```bash
+python3 inference.py inference_clean
+```
+2. To run inference on other set:
+
+```bash
+python3 inference.py inference_clean
 ```
 
 ## Credits

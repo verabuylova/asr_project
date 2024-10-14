@@ -9,12 +9,12 @@ defaults:
 text_encoder:
   _target_: src.text_encoder.CTCTextEncoder
   use_lm: True
-  kenlm_model_path: "/kaggle/working/lower-4-gram.arpa"
-  vocab_path: "/kaggle/input/vocabulary/librispeech-vocab.txt"
+  kenlm_model_path: "3-gram.arpa"
+  vocab_path: "librispeech-vocab.txt"
 
 inferencer:
   device_tensors: [ "spectrogram", "text_encoded" ] # which tensors should be on device (ex. GPU)
   device: auto # device name or "auto"
   save_path: "result" # any name here, can be a dataset name
   seed: 42
-  from_pretrained: "/kaggle/input/model-best-4-other/model_best_4_other.pth" # path to the pretrained model
+  from_pretrained: "model_best_4_other.pth" # path to the pretrained model

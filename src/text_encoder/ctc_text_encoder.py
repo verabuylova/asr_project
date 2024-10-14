@@ -61,36 +61,28 @@ class CTCTextEncoder:
         return "".join([self.ind2char[int(ind)] for ind in inds]).strip()
 
     def ctc_decode(self, inds) -> str:
-        decoded = []
-        empty_ind = self.char2ind[self.EMPTY_TOK]
-        last_char_ind = empty_ind
-        for ind in inds:
-            if ind == last_char_ind:
+        res = []
+        empty_i = self.char2ind[self.EMPTY_TOK]
+        last = empty_i
+        for i in inds:
+            if i != last and i != empty_i:
+                res.append(self.ind2char[i])
                 continue
-            else:
-                if ind != empty_ind:
-                    decoded.append(self.ind2char[ind])
-            last_char_ind = ind
-        return "".join(decoded)
+            last = i
+        return "".join(res)
 
 
     def ctc_beam_search(self, use_lm: bool, log_probs: torch.tensor, probs: torch.tensor, logits: torch.tensor, beam_size: int):
         if use_lm:
             if isinstance(logits, torch.Tensor):
                 logits = logits.detach().cpu().numpy()
-            return self.decoder_lm.decode(logits, 10).lower()
-        else:
-            if isinstance(probs, torch.Tensor):
-                probs = probs.detach().cpu().numpy()
-            return self.decoder_no_lm.decode(probs, 10).lower()
+            return self.decoder_lm.decode(logits, 100).lower()
         
-        dp = {
-            ('', self.EMPTY_TOK): 1.0
-        }
-        
-        def extend_path_and_merge(dp, next_token_probs: torch.tensor, ind2char: dict):
+        dp = {("", self.EMPTY_TOK): 1.0}
+
+        def extend_path_and_merge(dp, next_token_probs: np.array, ind2char: dict):
             new_dp = defaultdict(float)
-            for ind, next_token_prob in enumerate(next_token_probs.T):
+            for ind, next_token_prob in enumerate(next_token_probs):
                 cur_char = ind2char[ind]
                 for (prefix, last_char), v in dp.items():
                     if cur_char == last_char:
@@ -100,13 +92,15 @@ class CTCTextEncoder:
                             new_prefix = prefix + cur_char
                         else:
                             new_prefix = prefix
-                    new_dp[(new_prefix, cur_char)] += v + next_token_prob
+                    new_dp[(new_prefix, cur_char)] += (v * next_token_prob) 
             return new_dp
 
         def truncate_paths(dp, beam_size):
-            return dict(sorted(list(dp.items()), key=lambda x: -x[1], reverse=True)[ : beam_size])
-        for probs in log_probs:
-            dp = extend_path_and_merge(dp=dp, next_token_probs=probs, ind2char=self.ind2char)
+            d = dict(sorted(list(dp.items()), key = lambda x: x[1], reverse = True)[:beam_size])
+            return d
+        
+        for i in np.exp(log_probs):
+            dp = extend_path_and_merge(dp, i, self.ind2char)
             dp = truncate_paths(dp, beam_size)
 
         dp = [(prefix, proba) for (prefix, _), proba in dp.items()]

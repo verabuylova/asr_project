@@ -145,7 +145,7 @@ class Inferencer(BaseTrainer):
             probs = batch["probs"][i].clone()
             length = batch["log_probs_length"][i].clone()
             label = batch["text"][i]
-            pred_label = self.text_encoder.ctc_beam_search(True, log_probs, probs, logits[:length], 10) 
+            pred_label = self.text_encoder.ctc_beam_search(True, log_probs, probs, logits[:length], 100) 
 
             output_id = current_id + i
 
