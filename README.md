@@ -56,7 +56,7 @@ Follow these steps to install the project:
 
 ## How To Use
 
-To train a model, download the files from [here](https://disk.yandex.ru/client/disk/asr). and locate them to the working repository. Then, run the following commands:
+To train a model, download the files from [here](https://disk.yandex.ru/d/7MxFxgQEND61Ew) and locate them to the working repository. Then, run the following commands:
 
 1. Train 30 epochs on train-clean-100.
 
@@ -82,17 +82,17 @@ python3 train.py -cn=deepspeech2_other
 python3 train.py -cn=deepspeech2_other_round2
 ```
 
-To run inference (evaluate the model or save predictions), download the files from here and locate them to the working repository. Then, run the following commands:
+To run inference (evaluate the model or save predictions), download the files from [here](https://disk.yandex.ru/d/7MxFxgQEND61Ew) and locate them to the working repository. Then, run the following commands:
 
 1. To run inference on clean set:
 
 ```bash
-python3 inference.py inference_clean
+python3 inference.py -cn=inference_clean
 ```
 2. To run inference on other set:
 
 ```bash
-python3 inference.py inference_clean
+python3 inference.py -cn=inference_other
 ```
 
 ## Credits
